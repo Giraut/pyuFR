@@ -1,0 +1,55 @@
+                                    pyuFR
+                                    -----
+
+    Pure Python communication class for Digital Logic uFR-series NFC readers
+    ------------------------------------------------------------------------
+
+This is a Python class to communicate with Digital Logic uFR-series NFC readers
+such as the uFR Nano or Nano Online (https://www.d-logic.net/).
+
+Communication options include serial, UDP, TCP and HTTP POST (REST).
+
+See test routine at the bottom of the class for usage examples.
+
+
+
+Why?
+
+Digital Logic provides a full library for most platform that's perfectly usable
+in Python (https://www.d-logic.net/code/nfc-rfid-reader-sdk/ufr-lib).
+However, it has several drawbacks:
+
+- Need to import a proprietary binary blob
+
+- If your device uses a FTDI USB-to-serial interface, you must disable the
+  native Linux FTDI kernel modules (ftdi_sio and usbserial), as it conflicts
+  with the Digital Logic library. If you have other USB serial devices
+  connected to your system, this is not an option.
+
+- The Digital Logic library makes it difficult to debug low-level issues
+
+Fortunately, Digital Logic is very open with their serial protocol and has
+documented it fully and comprehensively. This class reimplements it in pure
+Python.
+
+
+
+                     /!\ WARNING: work in progress /!\
+
+State of completion:
+
+  - Core protocol fully implemented (sending commands, receiving answers over
+    serial and network)
+
+  - Front-end API calls (i.e. convenience functions to communicate with a
+    reader "smartly") partially implemented. Currently basic device probing
+    functions, a few configuration functions, sleep / reset functions and
+    UID probing
+
+
+
+           ---------------------------------------------------------
+                   Bug reports? Questions? You can email me.
+                   Run this command to get my email address:
+           C=base64\ -d;$C<<<Y205emEybHpRSEoxYm1KdmVDNWpiMjBLCg==|$C
+           ---------------------------------------------------------

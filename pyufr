@@ -1,0 +1,762 @@
+#!/usr/bin/python3
+"""Pure Python class to communicate with uFR series readers
+"""
+
+### Parameters
+default_ufr_device = "serial:///dev/ttyUSB0:1000000"	# Nano USB serial
+#default_ufr_device = "udp://ufr:8881"			# Nano Online slave UDP
+#default_ufr_device = "tcp://ufr:8881"			# Nano Online slave TCP
+#default_ufr_device = "http://ufr/uart1"		# Nano Online REST UART1
+default_ufr_timeout = 1  #s
+
+
+
+### Modules
+import re
+from time import sleep
+from enum import IntEnum
+from serial import Serial
+from datetime import datetime
+from requests import post
+from socket import socket, gethostbyname, AF_INET, SOCK_DGRAM, SOCK_STREAM
+
+
+
+### Enums
+class ufrhead(IntEnum):
+  CMD_HEADER                              = 0x55
+  ACK_HEADER                              = 0xac
+  RESPONSE_HEADER                         = 0xde
+  ERR_HEADER                              = 0xec
+
+class ufrtrail(IntEnum):
+  CMD_TRAILER                             = 0xaa
+  ACK_TRAILER                             = 0xca
+  RESPONSE_TRAILER                        = 0xed
+  ERR_TRAILER                             = 0xce
+
+class ufrcmd(IntEnum):
+  GET_READER_TYPE                         = 0x10
+  GET_READER_SERIAL                       = 0x11
+  GET_SERIAL_NUMBER                       = 0x40
+  GET_HARDWARE_VERSION                    = 0x2a
+  GET_FIRMWARE_VERSION                    = 0x29
+  GET_BUILD_NUMBER                        = 0x2b
+  READER_KEY_WRITE                        = 0x12
+  USER_DATA_READ                          = 0x1b
+  USER_DATA_WRITE                         = 0x1c
+  READER_KEYS_LOCK                        = 0x27
+  READER_KEYS_UNLOCK                      = 0x28
+  READER_PASSWORD_WRITE                   = 0x33
+  SELF_RESET                              = 0x30
+  SET_SPEED_PERMANENTLY                   = 0x4b
+  GET_SPEED_PARAMETERS                    = 0x4c
+  SET_UART_SPEED                          = 0x70
+  RED_LIGHT_CONTROL                       = 0x71
+  USER_INTERFACE_SIGNAL                   = 0x26
+  SET_RF_ANALOG_SETTINGS                  = 0x7d
+  GET_RF_ANALOG_SETTINGS                  = 0x7e
+  SET_LED_CONFIG                          = 0x6e
+  DEFAULT_UART_SPEED_SESSION              = 0xf1
+  GET_CARD_ID                             = 0x13
+  GET_CARD_ID_EX                          = 0x2c
+  GET_DLOGIC_CARD_TYPE                    = 0x3c
+  GET_LAST_CARD_ID_EX                     = 0x7c
+  SECTOR_TRAILER_WRITE                    = 0x1a
+  SECTOR_TRAILER_WRITE_UNSAFE             = 0x2f
+  BLOCK_READ                              = 0x16
+  BLOCK_WRITE                             = 0x17
+  BLOCK_IN_SECTOR_READ                    = 0x18
+  BLOCK_IN_SECTOR_WRITE                   = 0x19
+  LINEAR_READ                             = 0x14
+  LINEAR_WRITE                            = 0x15
+  LINEAR_FORMAT_CARD                      = 0x25
+  LIN_ROW_READ                            = 0x45
+  VALUE_BLOCK_READ                        = 0x1d
+  VALUE_BLOCK_WRITE                       = 0x1e
+  VALUE_BLOCK_INC                         = 0x21
+  VALUE_BLOCK_DEC                         = 0x22
+  VALUE_BLOCK_IN_SECTOR_READ              = 0x1f
+  VALUE_BLOCK_IN_SECTOR_WRITE             = 0x20
+  VALUE_BLOCK_IN_SECTOR_INC               = 0x23
+  VALUE_BLOCK_IN_SECTOR_DEC               = 0x24
+  GET_DESFIRE_UID                         = 0x80
+  SET_DESFIRE_KEY                         = 0x81
+  DESFIRE_WRITE_TO_FILE                   = 0x82
+  DESFIRE_READ_FROM_FILE                  = 0x83
+  DESFIRE_CREATE_APPLICATION              = 0x84
+  DESFIRE_CREATE_FILE                     = 0x85
+  DESFIRE_CREATE_AES_KEY                  = 0x86
+  DESFIRE_GET_KEY_CONFIG                  = 0x87
+  DESFIRE_CHANGE_KEY_CONFIG               = 0x88
+  DESFIRE_DELETE_APPLICATION              = 0x89
+  DESFIRE_DELETE_FILE                     = 0x8a
+  DESFIRE_SET_CONFIGURATION               = 0x8b
+  DESFIRE_FORMAT_CARD                     = 0x8c
+  DESFIRE_FREE_MEM                        = 0x8d
+  DESFIRE_WRITE_AES_KEY                   = 0x8e
+  DESFIRE_CREATE_VALUE_FILE               = 0x8f
+  DESFIRE_READ_VALUE_FILE                 = 0x9a
+  DESFIRE_INCREASE_VALUE_FILE             = 0x9b
+  DESFIRE_DECREASE_VALUE_FILE             = 0x9c
+  DESFIRE_CREATE_RECORD_FILE              = 0x97
+  DESFIRE_WRITE_RECORD                    = 0x98
+  DESFIRE_READ_RECORDS                    = 0x99
+  DESFIRE_CLEAR_RECORD                    = 0x6d
+  DESFIRE_GET_APPLICATION_IDS             = 0xc0
+  MFP_FIRST_AUTHENTICATE                  = 0x6a
+  MFP_CHANGE_REG_KEY                      = 0x6b
+  MFP_GET_UID                             = 0x6c
+  GET_NFC_T2T_VERSION                     = 0xb0
+  READ_COUNTER                            = 0xb1
+  INCREMENT_COUNTER                       = 0xb2
+  NT4H_COMMON_CMD                         = 0xb3
+  READ_ECC_SIGNATURE                      = 0xbf
+  SET_CARD_ID_SEND_CONF                   = 0x3d
+  GET_CARD_ID_SEND_CONF                   = 0x3e
+  SET_BAD_SELECT_NR_MAX                   = 0x3f
+  GET_BAD_SELECT_NR_MAX                   = 0x44
+  ENTER_SLEEP_MODE                        = 0x46
+  LEAVE_SLEEP_MODE                        = 0x47
+  AUTO_SLEEP_SET                          = 0x4d
+  AUTO_SLEEP_GET                          = 0x4e
+  SET_DISPLAY_DATA                        = 0x72
+  SET_SPEAKER_FREQUENCY                   = 0x73
+  SET_DISPLAY_INTENSITY                   = 0x74
+  GET_DISPLAY_INTENSITY                   = 0x75
+  UFR_XRC_LOCK_OPEN                       = 0x60
+  UFR_XRC_SET_RELAY_STATE                 = 0x61
+  UFR_XRC_GET_IO_STATE                    = 0x62
+  ENTER_SHARE_RAM_COMM_MODE               = 0x78
+  EXIT_SHARE_RAM_COMM_MODE                = 0x79
+  READ_SHARE_RAM                          = 0x7a
+  WRITE_SHARE_RAM                         = 0x7b
+  I_BLOCK_TRANSCEIVE                      = 0x90
+  R_BLOCK_TRANSCEIVE                      = 0x91
+  S_BLOCK_DESELECT                        = 0x92
+  SET_ISO14433_4_MODE                     = 0x93
+  APDU_TRANSCEIVE                         = 0x94
+  ESP_SET_IO_STATE                        = 0xf3
+  ESP_GET_IO_STATE                        = 0xf4
+  ESP_READER_TIME_WRITE                   = 0xf5
+  ESP_READER_TIME_READ                    = 0xf6
+  ESP_READER_EEPROM_READ                  = 0xf7
+  ESP_SET_DISPLAY_DATA                    = 0xf8
+  ESP_READER_RESET                        = 0xf9
+  ESP_READER_PASSWORD_WRITE               = 0xfa
+  ESP_READER_EEPROM_WRITE                 = 0xfb
+  CHECK_UID_CHANGE                        = 0xe4
+  RF_RESET                                = 0xe5
+  GET_READER_STATUS                       = 0xe6
+
+class ufrerr(IntEnum):
+  OK                                      = 0x00
+  COMMUNICATION_ERROR                     = 0x01
+  CHKSUM_ERROR                            = 0x02
+  READING_ERROR                           = 0x03
+  WRITING_ERROR                           = 0x04
+  BUFFER_OVERFLOW                         = 0x05
+  MAX_ADDRESS_EXCEEDED                    = 0x06
+  MAX_KEY_INDEX_EXCEEDED                  = 0x07
+  NO_CARD                                 = 0x08
+  COMMAND_NOT_SUPPORTED                   = 0x09
+  FORBIDEN_DIRECT_WRITE_IN_SECTOR_TRAILER = 0x0a
+  ADDRESSED_BLOCK_IS_NOT_SECTOR_TRAILER   = 0x0b
+  WRONG_ADDRESS_MODE                      = 0x0c
+  WRONG_ACCESS_BITS_VALUES                = 0x0d
+  AUTH_ERROR                              = 0x0e
+  PARAMETERS_ERROR                        = 0x0f
+  MAX_SIZE_EXCEEDED                       = 0x10
+  UNSUPPORTED_CARD_TYPE                   = 0x11
+  COUNTER_ERROR                           = 0x12
+  WRITE_VERIFICATION_ERROR                = 0x70
+  BUFFER_SIZE_EXCEEDED                    = 0x71
+  VALUE_BLOCK_INVALID                     = 0x72
+  VALUE_BLOCK_ADDR_INVALID                = 0x73
+  VALUE_BLOCK_MANIPULATION_ERROR          = 0x74
+  WRONG_UI_MODE                           = 0x75
+  KEYS_LOCKED                             = 0x76
+  KEYS_UNLOCKED                           = 0x77
+  WRONG_PASSWORD                          = 0x78
+  CAN_NOT_LOCK_DEVICE                     = 0x79
+  CAN_NOT_UNLOCK_DEVICE                   = 0x7a
+  DEVICE_EEPROM_BUSY                      = 0x7b
+  RTC_SET_ERROR                           = 0x7c
+  EEPROM_ERROR                            = 0x7d
+  NO_CARDS_ENUMERRATED                    = 0x7e
+  CARD_ALREADY_SELECTED                   = 0x7f
+  WRONG_CARD_TYPE                         = 0x80
+  FORBIDDEN_IN_TAG_EMULATION_MODE         = 0x90
+  MFP_COMMAND_OVERFLOW                    = 0xb0
+  MFP_INVALID_MAC                         = 0xb1
+  MFP_INVALID_BLOCK_NR                    = 0xb2
+  MFP_NOT_EXIST_BLOCK_NR                  = 0xb3
+  MFP_COND_OF_USE_ERROR                   = 0xb4
+  MFP_LENGTH_ERROR                        = 0xb5
+  MFP_GENERAL_MANIP_ERROR                 = 0xb6
+  MFP_SWITCH_TO_ISO14443_4_ERROR          = 0xb7
+  MFP_ILLEGAL_STATUS_CODE                 = 0xb8
+  MFP_MULTI_BLOCKS_READ                   = 0xb9
+  NT4H_COMMAND_ABORTED                    = 0xc0
+  NT4H_LENGTH_ERROR                       = 0xc1
+  NT4H_PARAMETER_ERROR                    = 0xc2
+  NT4H_NO_SUCH_KEY                        = 0xc3
+  NT4H_PERMISSION_DENIED                  = 0xc4
+  NT4H_AUTHENTICATION_DELAY               = 0xc5
+  NT4H_MEMORY_ERROR                       = 0xc6
+  NT4H_INTEGRITY_ERROR                    = 0xc7
+  NT4H_FILE_NOT_FOUND                     = 0xc8
+  NT4H_BOUNDARY_ERROR                     = 0xc9
+  NT4H_INVALID_MAC                        = 0xca
+  NT4H_NO_CHANGES                         = 0xcb
+
+class ufrauthmode(IntEnum):
+  RKA_AUTH1A                              = 0x00
+  RKA_AUTH1B                              = 0x01
+  AKM1_AUTH1A                             = 0x20
+  AKM1_AUTH1B                             = 0x21
+  AKM2_AUTH1A                             = 0x40
+  AKM2_AUTH1B                             = 0x41
+  PK_AUTH1A                               = 0x60
+  PK_AUTH1B                               = 0x61
+  PK_AUTH1A_AES                           = 0x80
+  PK_AUTH1B_AES                           = 0x81
+  SAM_KEY_AUTH1A                          = 0x10
+  SAM_KEY_AUTH1B                          = 0x11
+  MFP_RKA_AUTH1A                          = 0x02
+  MFP_RKA_AUTH1B                          = 0x03
+  MFP_AKM1_AUTH1A                         = 0x22
+  MFP_AKM1_AUTH1B                         = 0x23
+  MFP_AKM2_AUTH1A                         = 0x42
+  MFP_AKM2_AUTH1B                         = 0x43
+
+class ufrtagcommtype(IntEnum):
+  ISO14443_TYPE_A                         = 0X01
+  ISO14443_TYPE_B                         = 0X02
+  ISO14443_4_212_KBPS                     = 0X03
+  ISO14443_4_424_KBPS                     = 0X04
+
+class pn53xanalogsettingsreg(IntEnum):
+  RFCFG                                   = 0
+  RXTHRESHOLD                             = 1
+  GSNON                                   = 2
+  CWGSP                                   = 3
+  GSNOFF                                  = 4
+  MODGSP                                  = 4
+
+
+
+### Defines
+ufr_header_vals = tuple(map(int, ufrhead)) 
+ufr_trailer_vals = tuple(map(int, ufrtrail)) 
+ufr_cmd_vals = tuple(map(int, ufrcmd))
+ufr_err_vals = tuple(map(int, ufrerr))
+ufr_val_to_cmd = {cmd.value: cmd for cmd in ufrcmd}
+ufr_val_to_err = {err.value: err for err in ufrerr}
+
+# Leave sleep mode parameters
+WAKE_UP_BYTE         = 0
+WAKE_UP_WAIT         = .01 #s
+POST_WAKE_UP_WAIT    = .1 #s	Apparently needed by the reader
+
+# Soft restart parameters
+POST_SELF_RESET_WAIT = .1 #s	Apparently needed by the reader
+
+
+
+### Classes
+class ufr_answer:
+
+  def __init__(self):
+
+    self.is_ack = False
+    self.is_err = False
+    self.is_rsp = False
+    self.has_ext = False
+
+    self.header = None
+    self.code = None
+    self.trailer = None
+
+    self.ext_len = None
+
+    self.val0 = None
+    self.val1 = None
+
+    self.checksum = None
+
+    self.ext = None
+    self.ext_checksum = None
+
+
+
+  def printable(self):
+    """Return a human-readable description of the answer
+    """
+
+    desc = "ACK" if self.is_ack else "ERR" if self.is_err else "RSP"
+    desc += "_EXT" if self.has_ext and not self.is_ack else ""
+    desc += ", cmd=" if self.is_ack or self.is_rsp else ", err="
+    desc += self.code.name
+    desc += ", ext_len={}".format(self.ext_len)
+    desc += ", val0={:02x}h, val1={:02x}h".format(self.val0, self.val1)
+    if self.has_ext and not self.is_ack:
+      desc += ", ext=("
+      desc += ", ".join(["{:02x}h".format(v) for v in self.ext])
+      desc += ")"
+    return(desc)
+
+
+
+class ufr:
+
+  def __init__(self):
+
+    self.serdev = None
+
+    self.udpsock = None
+    self.udphost = None
+    self.udpport = None
+
+    self.tcpsock = None
+
+    self.resturl = None
+    self.postdata = None
+
+    self.timeout = None
+
+    self.recbuf = []
+
+    self.last_cmd = None
+
+    self.answer = ufr_answer()
+
+
+
+  def open(self, dev = default_ufr_device, timeout = default_ufr_timeout):
+    """Open a connection. The device format is one of:
+
+    serial://<device file>:<baudrate>
+    udp://<host>:<port>
+    tcp://<host>:<port>
+    http://<host>/uartX
+    """
+
+    # Open a device using the serial, UDP, TCP or HTTP method
+    m = re.findall("^(serial|udp|tcp)://(.+):([0-9]+)/*$", dev)
+    if m:
+      proto, devhost, baudport = m[0]
+
+      if proto == "serial":
+        self.serdev = Serial(devhost, baudport, timeout = timeout)
+
+      elif proto == "udp":
+        self.udpsock = socket(AF_INET, SOCK_DGRAM) 
+        self.udpsock.settimeout(timeout)
+        self.udphost = gethostbyname(devhost)
+        self.udpport = int(baudport)
+
+      elif proto == "tcp":
+        self.tcpsock = socket(AF_INET, SOCK_STREAM) 
+        self.tcpsock.settimeout(timeout)
+        self.tcpsock.connect((gethostbyname(devhost), int(baudport)))
+
+      self.timeout = timeout
+      return
+
+    m = re.findall("^(http://.+/uart[12])/*$", dev)
+    if m:
+      self.resturl = m[0]
+      return
+
+    raise ValueError("unknown uFR device {}".format(dev))
+
+
+  def _checksum(self, data):
+    """Calculate the checksum of a row of bytes
+    """
+
+    csum = 0
+    for b in data:
+      csum ^= b
+
+    return((csum + 0x07) % 256)
+    
+
+
+  def _send_data(self, data):
+    """Send a data packet
+    """
+
+    # Send to a serial device
+    if self.serdev is not None:
+      self.serdev.write(data)
+      self.serdev.flush()
+
+    # Send to a UDP host
+    elif self.udpsock is not None:
+      self.udpsock.sendto(bytes(data), (self.udphost, self.udpport))
+
+    # Send to a TCP host
+    elif self.tcpsock is not None:
+      self.tcpsock.sendall(bytes(data))
+
+    # "Send" to a HTTP server
+    elif self.resturl is not None:
+      self.postdata = "".join(["{:02X}".format(b) for b in data])
+
+
+
+  def _get_data(self, timeout = None):
+    """Receive data
+    """
+
+    # Receive from a serial device
+    if self.serdev is not None:
+      if timeout is not None:
+        serdev.timeout = timeout
+      data = self.serdev.read(1)
+      if not data:
+        raise TimeoutError
+
+    # Receive from a UDP host
+    elif self.udpsock is not None:
+      timeout_tstamp = datetime.now().timestamp() + self.timeout
+      data = None
+      while not data:
+        data, fromhostport = self.udpsock.recvfrom(1024)
+        if fromhostport[0] != self.udphost:
+          data = None
+        if not data and datetime.now().timestamp() >= timeout_tstamp:
+          raise TimeoutError
+
+    # Receive from a TCP host
+    elif self.tcpsock is not None:
+      data = self.tcpsock.recv(1024)
+
+    # Receive a POST reply from a HTTP server
+    elif self.resturl is not None:
+      data = post(self.resturl, data = self.postdata,
+			timeout = self.timeout).text.rstrip("\r\n\0 ")
+      if not re.match("^([0-9a-zA-Z][0-9a-zA-Z])+$", data):
+        if not data:
+          raise ValueError("empty HTTP POST response")
+        else:
+          raise ValueError("invalid HTTP POST response: {}".format(data))
+      data = [int(data[i:i+2], 16) for i in range(0, len(data), 2)]
+      self.postdata = None
+
+    return(data)
+
+
+
+  def send_cmd(self, cmd, par0 = 0, par1 = 0, ext_len = 0):
+    """Send a short command
+    """
+
+    packet = [ufrhead.CMD_HEADER.value, cmd.value, ufrtrail.CMD_TRAILER.value,
+		ext_len, par0, par1]
+    packet.append(self._checksum(packet))
+    self._send_data(packet)
+
+    self.last_cmd = cmd
+
+
+
+  def send_ext(self, ext_parms):
+    """Sent extended command parameters
+    """
+
+    packet = list(ext_parms)
+    packet.append(self._checksum(packet))
+    self._send_data(packet)
+
+
+
+  def send_cmd_ext(self, cmd, par0, par1, ext_parms):
+    """Send an extended command in two steps: first the short command, wait for
+    an ACK, then send the extended command parameters
+    """
+
+    ext_len = len(ext_parms) + 1
+
+    if not ext_len:
+      return(self.send_cmd(cmd, par0 = par0, par1 = par1, ext_len = 0))
+
+    self.send_cmd(cmd, par0 = par0, par1 = par1, ext_len = ext_len)
+
+    answer = self.get_answer()
+
+    if not answer.is_ack or answer.code != cmd.value:
+      raise ValueError("expected ACK to {}, ext_len={}, "
+			"par0={:02x}h, par1={:02x}h - got {}".format(
+			cmd.name, ext_len, par0, par1, answer.printable()))
+
+    self.send_ext(ext_parms)
+
+
+
+  def get_answer(self):
+    """Get an answer packet
+    """
+
+    self.answer.__init__()
+
+    while True:
+
+      # Read data if the receive buffer is empty
+      if not self.recbuf:
+        data = self._get_data()
+        self.recbuf.extend(data)
+
+      # Parse the receive buffer
+      b = self.recbuf.pop(0)
+
+      # Get header
+      if self.answer.header is None:
+        if b in ufr_header_vals:
+          self.answer.header = b
+          self.answer.is_ack = (b == ufrhead.ACK_HEADER)
+          self.answer.is_err = (b == ufrhead.ERR_HEADER)
+          self.answer.is_rsp = (b == ufrhead.RESPONSE_HEADER)
+        continue
+
+      # Get the code (either command or error)
+      if self.answer.code is None:
+        if (self.answer.is_ack or self.answer.is_rsp) and b in ufr_cmd_vals:
+          self.answer.code = ufr_val_to_cmd[b]
+        elif self.answer.is_err and b in ufr_err_vals:
+          self.answer.code = ufr_val_to_err[b]
+        else:
+          self.answer.__init__()
+        continue
+
+      # Get the trailer
+      if self.answer.trailer is None:
+        if (self.answer.header == ufrhead.ACK_HEADER and \
+			b == ufrtrail.ACK_TRAILER) or \
+		(self.answer.header == ufrhead.ERR_HEADER and \
+			b == ufrtrail.ERR_TRAILER) or \
+		(self.answer.header == ufrhead.RESPONSE_HEADER and \
+			b == ufrtrail.RESPONSE_TRAILER):
+          self.answer.trailer = b
+        else:
+          self.answer.__init__()
+        continue
+
+      # Get the length of the returned parameters
+      if self.answer.ext_len is None:
+        if b == 0 or b >= 2:
+          self.answer.ext_len = b
+          self.answer.has_ext = (b != 0)
+        else:
+          self.answer.__init__()
+        continue
+
+      # Get val0
+      if self.answer.val0 is None:
+        self.answer.val0 = b
+        continue
+
+      # Get val1
+      if self.answer.val1 is None:
+        self.answer.val1 = b
+        continue
+
+      # Get the checksum
+      if self.answer.checksum is None:
+        if self._checksum((self.answer.header, self.answer.code,
+		self.answer.trailer, self.answer.ext_len,
+		self.answer.val0, self.answer.val1)) == b:
+          self.answer.checksum = b
+
+          # If the response is short, return it immediately
+          if not self.answer.has_ext or self.answer.is_ack:
+            return(self.answer)
+
+        else:
+          self.answer.__init__()
+        continue
+
+      # Get the first byte of the extended packet
+      if self.answer.ext is None:
+        self.answer.ext = [b]
+        nb_ext_bytes_remaining = self.answer.ext_len - 2
+        continue
+
+      # Get the rest of the extended packet
+      if nb_ext_bytes_remaining:
+        self.answer.ext.append(b)
+        nb_ext_bytes_remaining -= 1
+        continue
+
+      # Get the extended packet's checksum
+      if self._checksum(self.answer.ext) == b:
+        self.answer.ext = tuple(self.answer.ext)
+        self.answer.ext_checksum = b
+
+        # Return the long answer
+        return(self.answer)
+
+      else:
+        self.answer.__init__()
+
+
+
+  def get_last_command_response(self):
+    """Get a responde to the last command sent. Throw an exception if the
+    answer is unexpected
+    """
+
+    answer = self.get_answer()
+    if not answer.is_rsp or answer.code != self.last_cmd:
+      raise ValueError("expected response to {} - got {}".format(
+			self.last_cmd.name, answer.printable()))
+    return(answer)
+
+
+
+  def close(self):
+    """Close any open connection
+    """
+
+    if self.serdev is not None:
+      self.serdev.close()
+      self.serdev = None
+
+    if self.udpsock is not None:
+      self.udpsock.close()
+      self.udpsock = None
+      self.udphost = None
+      self.udpport = None
+
+    if self.tcpsock is not None:
+      self.tcpsock.close()
+
+    self.timeout = None
+
+
+  def __del__(self):
+
+    self.close()
+
+
+
+  # Front-end API functions - added as needed
+  def get_reader_type(self):
+
+    self.send_cmd(ufrcmd.GET_READER_TYPE)
+    rsp = self.get_last_command_response()
+    return(rsp.ext[0] + (rsp.ext[1] << 8) + \
+		(rsp.ext[2] << 16) + (rsp.ext[3] << 24))
+
+  def get_serial_number(self):
+
+    self.send_cmd(ufrcmd.GET_SERIAL_NUMBER)
+    rsp = self.get_last_command_response()
+    return(bytes(rsp.ext).decode("ascii"))
+
+  def get_hardware_version(self):
+
+    self.send_cmd(ufrcmd.GET_HARDWARE_VERSION)
+    rsp = self.get_last_command_response()
+    return((rsp.val0 << 8) + rsp.val1)
+
+  def get_firmware_version(self):
+
+    self.send_cmd(ufrcmd.GET_FIRMWARE_VERSION)
+    rsp = self.get_last_command_response()
+    return((rsp.val0 << 8) + rsp.val1)
+
+  def get_build_number(self):
+
+    self.send_cmd(ufrcmd.GET_BUILD_NUMBER)
+    rsp = self.get_last_command_response()
+    return(rsp.val0)
+
+  def get_card_id_ex(self):
+
+    self.send_cmd(ufrcmd.GET_CARD_ID_EX)
+    try:
+      rsp = self.get_last_command_response()
+    except:
+      if self.answer.code == ufrerr.NO_CARD:
+        return(None)
+      else:
+        raise
+    return(":".join(["{:02X}".format(v) for v in rsp.ext[:rsp.val1]]))
+
+  def get_analog_settings(self, tag_comm_type):
+
+    self.send_cmd(ufrcmd.GET_RF_ANALOG_SETTINGS, tag_comm_type)
+    rsp = self.get_last_command_response()
+    return(rsp.ext)
+
+  def set_analog_settings(self, tag_comm_type, factory_settings, settings):
+
+    self.send_cmd_ext(ufrcmd.SET_RF_ANALOG_SETTINGS, tag_comm_type,
+			1 if factory_settings else 0, settings)
+    rsp = self.get_last_command_response()
+
+  def enter_sleep_mode(self):
+
+    self.send_cmd(ufrcmd.ENTER_SLEEP_MODE)
+    rsp = self.get_last_command_response()
+
+  def leave_sleep_mode(self):
+
+    self._send_data((WAKE_UP_BYTE,))
+    sleep(WAKE_UP_WAIT)
+    self.send_cmd(ufrcmd.LEAVE_SLEEP_MODE)
+    rsp = self.get_last_command_response()
+    sleep(POST_WAKE_UP_WAIT)
+
+  def rf_reset(self):
+
+    self.send_cmd(ufrcmd.RF_RESET)
+    rsp = self.get_last_command_response()
+
+  def self_reset(self):
+
+    self.send_cmd(ufrcmd.SELF_RESET)
+    rsp = self.get_last_command_response()
+    sleep(POST_SELF_RESET_WAIT)
+
+
+
+### Test routine
+if __name__ == "__main__":
+  """Test routine
+  """
+
+  ufr = ufr()
+  ufr.open()
+  print("GET_READER_TYPE:        ", hex(ufr.get_reader_type()))
+  print("GET_SERIAL_NUMBER:      ", ufr.get_serial_number())
+  print("GET_HARDWARE_VERSION:   ", hex(ufr.get_hardware_version()))
+  print("GET_FIRMWARE_VERSION:   ", hex(ufr.get_firmware_version()))
+  print("GET_BUILD_NUMBER:       ", hex(ufr.get_build_number()))
+  
+  for tct in tuple(map(int, ufrtagcommtype)):
+    print("GET_RF_ANALOG_SETTINGS: ", ufr.get_analog_settings(tct))
+#    new_settings = list(ufr.answer.ext)
+#    new_settings[pn53xanalogsettingsreg.RXTHRESHOLD] = 255
+#    print("SET_RF_ANALOG_SETTINGS")
+#    ufr.set_analog_settings(tct, False, new_settings)
+
+  print("SELF_RESET")
+  ufr.self_reset()
+
+  if ufr.tcpsock is None and ufr.resturl is None:
+    print("ENTER_SLEEP_MODE")
+    ufr.enter_sleep_mode()
+    print("LEAVE_SLEEP_MODE")
+    ufr.leave_sleep_mode()
+
+  for i in range(10):
+    print("GET_CARD_ID_EX:         ", ufr.get_card_id_ex())
+    sleep(.5)
+
+  ufr.close()
+
+  del(ufr)
