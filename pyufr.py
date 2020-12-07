@@ -3,11 +3,19 @@
 """
 
 ### Parameters
-#default_ufr_device = "serial:///dev/ttyUSB0:1000000"	# Nano USB serial
+default_ufr_device = "serial:///dev/ttyUSB0:1000000"	# Nano USB serial
 #default_ufr_device = "udp://ufr:8881"			# Nano Online slave UDP
-default_ufr_device = "tcp://ufr:8881"			# Nano Online slave TCP
+#default_ufr_device = "tcp://ufr:8881"			# Nano Online slave TCP
 #default_ufr_device = "http://ufr/uart1"		# Nano Online REST UART1
-default_ufr_timeout = 1  #s
+default_ufr_timeout = 1 #s
+nano_online_support = False
+
+# API tests
+test_network_probe_functions  = False
+test_eeprom_writing_functions = False
+test_reset_functions          = True
+test_sleep_functions          = True
+test_uid_functions            = True
 
 
 
@@ -16,9 +24,13 @@ import re
 from time import sleep
 from enum import IntEnum
 from serial import Serial
-from datetime import datetime
-from requests import post
-from socket import socket, gethostbyname, AF_INET, SOCK_DGRAM, SOCK_STREAM
+
+if nano_online_support:
+  import requests
+  from datetime import datetime
+  from ipaddress import ip_network
+  from multiprocessing.pool import ThreadPool
+  from socket import socket, gethostbyname, AF_INET, SOCK_DGRAM, SOCK_STREAM
 
 
 
@@ -254,6 +266,11 @@ ufr_err_vals = tuple(map(int, ufrerr))
 ufr_val_to_cmd = {cmd.value: cmd for cmd in ufrcmd}
 ufr_val_to_err = {err.value: err for err in ufrerr}
 
+# Number of concurrent connection when scanning a subnet for Nano Onlines
+subnet_probe_concurrent_connections = 100
+
+
+
 # Leave sleep mode parameters
 WAKE_UP_BYTE         = 0
 WAKE_UP_WAIT         = .01 #s
@@ -453,7 +470,7 @@ class ufr:
 
     # Receive a POST reply from a HTTP server
     elif self.resturl is not None:
-      data = post(self.resturl, data = self.postdata,
+      data = requests.post(self.resturl, data = self.postdata,
 			timeout = self.current_timeout).text.rstrip("\r\n\0 ")
       if not re.match("^([0-9a-zA-Z][0-9a-zA-Z])+$", data):
         if not data:
@@ -660,6 +677,53 @@ class ufr:
 
 
 
+  def is_host_nano_online(self, host, timeout = None):
+    """Try to contact a host to see if it's running a HTTP server serving a
+    Nano online page
+    """
+
+    # Are we being called as a thread from probe_subnet_nano_onlines()?
+    if type(host) == tuple:
+      is_thread = True
+      host, timeout = host
+    else:
+      is_thread = False
+
+    # Try to get the Nano Online's login page
+    try:
+      response = requests.get("http://" + host, timeout = \
+			self.default_timeout if timeout is None else timeout)
+      is_nano_online = (response.status_code == 200 and \
+		re.search("uFR login", response.text) is not None)
+    except:
+      is_nano_online = False
+
+    # If we're called as a thread, return a tuple containing the host and the
+    # probe result. Otherwise return just the probe result
+    return((host, is_nano_online) if is_thread else is_nano_online)
+
+
+
+  def probe_subnet_nano_onlines(self, netaddr, timeout = None):
+    """Probe an entire subnet for Nano Onlines. Uses threads
+    """
+
+    ip_net = ip_network(netaddr)
+
+    threadpool = ThreadPool(processes = subnet_probe_concurrent_connections)
+
+    nano_online_ips = []
+    for host, is_nano_online in threadpool.map(self.is_host_nano_online,
+			[(str(host), timeout) for host in ip_net.hosts()]):
+      if is_nano_online:
+        nano_online_ips.append(host)
+
+    threadpool.close()
+
+    return(nano_online_ips)
+
+
+
   # Front-end API functions - added as needed
   def get_reader_type(self, timeout = None):
 
@@ -749,32 +813,42 @@ if __name__ == "__main__":
 
   ufr = ufr()
   ufr.open()
-  print("GET_READER_TYPE:        ", hex(ufr.get_reader_type()))
-  print("GET_SERIAL_NUMBER:      ", ufr.get_serial_number())
-  print("GET_HARDWARE_VERSION:   ", hex(ufr.get_hardware_version()))
-  print("GET_FIRMWARE_VERSION:   ", hex(ufr.get_firmware_version()))
-  print("GET_BUILD_NUMBER:       ", hex(ufr.get_build_number()))
+
+  if test_network_probe_functions:
+    print("IS_HOST_NANO_ONLINE:       ", ufr.is_host_nano_online("ufr"))
+    print("PROBE_SUBNET_NANO_ONLINES: ",
+			ufr.probe_subnet_nano_onlines("192.168.1.0/24"))
+
+  print("GET_READER_TYPE:           ", hex(ufr.get_reader_type()))
+  print("GET_SERIAL_NUMBER:         ", ufr.get_serial_number())
+  print("GET_HARDWARE_VERSION:      ", hex(ufr.get_hardware_version()))
+  print("GET_FIRMWARE_VERSION:      ", hex(ufr.get_firmware_version()))
+  print("GET_BUILD_NUMBER:          ", hex(ufr.get_build_number()))
   
-  for tct in tuple(map(int, ufrtagcommtype)):
+  for tct in map(int, ufrtagcommtype):
     print("GET_RF_ANALOG_SETTINGS: ", ufr.get_analog_settings(tct))
-    new_settings = list(ufr.answer.ext)
-    new_settings[pn53xanalogsettingsreg.RXTHRESHOLD] = 255
-    print("SET_RF_ANALOG_SETTINGS")
-    ufr.set_analog_settings(tct, False, new_settings)
 
-  print("SELF_RESET")
-  ufr.self_reset()
+    if test_eeprom_writing_functions:
+      new_settings = list(ufr.answer.ext)
+      new_settings[pn53xanalogsettingsreg.RXTHRESHOLD] = 255
+      print("SET_RF_ANALOG_SETTINGS")
+      ufr.set_analog_settings(tct, False, new_settings)
 
-  if ufr.tcpsock is None and ufr.resturl is None:
-    print("ENTER_SLEEP_MODE")
-    ufr.enter_sleep_mode()
-    print("LEAVE_SLEEP_MODE")
-    ufr.leave_sleep_mode()
+  if test_reset_functions:
+    print("SELF_RESET")
+    ufr.self_reset()
 
-  for i in range(10):
-    print("GET_CARD_ID_EX:         ", ufr.get_card_id_ex())
-    sleep(.5)
+  if test_sleep_functions:
+    if ufr.tcpsock is None and ufr.resturl is None:
+      print("ENTER_SLEEP_MODE")
+      ufr.enter_sleep_mode()
+      print("LEAVE_SLEEP_MODE")
+      ufr.leave_sleep_mode()
+
+  if test_uid_functions:
+    for i in range(10):
+      print("GET_CARD_ID_EX:         ", ufr.get_card_id_ex())
+      sleep(.5)
 
   ufr.close()
-
   del(ufr)
