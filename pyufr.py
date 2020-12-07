@@ -3,9 +3,9 @@
 """
 
 ### Parameters
-default_ufr_device = "serial:///dev/ttyUSB0:1000000"	# Nano USB serial
+#default_ufr_device = "serial:///dev/ttyUSB0:1000000"	# Nano USB serial
 #default_ufr_device = "udp://ufr:8881"			# Nano Online slave UDP
-#default_ufr_device = "tcp://ufr:8881"			# Nano Online slave TCP
+default_ufr_device = "tcp://ufr:8881"			# Nano Online slave TCP
 #default_ufr_device = "http://ufr/uart1"		# Nano Online REST UART1
 default_ufr_timeout = 1  #s
 
@@ -323,7 +323,8 @@ class ufr:
     self.resturl = None
     self.postdata = None
 
-    self.timeout = None
+    self.default_timeout = None
+    self.current_timeout = None
 
     self.recbuf = []
 
@@ -361,12 +362,16 @@ class ufr:
         self.tcpsock.settimeout(timeout)
         self.tcpsock.connect((gethostbyname(devhost), int(baudport)))
 
-      self.timeout = timeout
+      self.default_timeout = timeout
+      self.current_timeout = timeout
       return
 
     m = re.findall("^(http://.+/uart[12])/*$", dev)
     if m:
       self.resturl = m[0]
+
+      self.default_timeout = timeout
+      self.current_timeout = timeout
       return
 
     raise ValueError("unknown uFR device {}".format(dev))
@@ -411,17 +416,27 @@ class ufr:
     """Receive data
     """
 
+    # Change the timeout as needed
+    if timeout is None:
+      reset_timeout = (self.current_timeout != self.default_timeout)
+      self.current_timeout = self.default_timeout
+    else:
+      reset_timeout = (self.current_timeout != timeout)
+      self.current_timeout = timeout
+
     # Receive from a serial device
     if self.serdev is not None:
-      if timeout is not None:
-        serdev.timeout = timeout
+      if reset_timeout:
+        self.serdev.timeout = self.current_timeout
       data = self.serdev.read(1)
       if not data:
         raise TimeoutError
 
     # Receive from a UDP host
     elif self.udpsock is not None:
-      timeout_tstamp = datetime.now().timestamp() + self.timeout
+      if reset_timeout:
+        self.udpsock.settimeout(self.current_timeout)
+      timeout_tstamp = datetime.now().timestamp() + self.current_timeout
       data = None
       while not data:
         data, fromhostport = self.udpsock.recvfrom(1024)
@@ -432,12 +447,14 @@ class ufr:
 
     # Receive from a TCP host
     elif self.tcpsock is not None:
+      if reset_timeout:
+        self.tcpsock.settimeout(self.current_timeout)
       data = self.tcpsock.recv(1024)
 
     # Receive a POST reply from a HTTP server
     elif self.resturl is not None:
       data = post(self.resturl, data = self.postdata,
-			timeout = self.timeout).text.rstrip("\r\n\0 ")
+			timeout = self.current_timeout).text.rstrip("\r\n\0 ")
       if not re.match("^([0-9a-zA-Z][0-9a-zA-Z])+$", data):
         if not data:
           raise ValueError("empty HTTP POST response")
@@ -473,7 +490,7 @@ class ufr:
 
 
 
-  def send_cmd_ext(self, cmd, par0, par1, ext_parms):
+  def send_cmd_ext(self, cmd, par0, par1, ext_parms, timeout = None):
     """Send an extended command in two steps: first the short command, wait for
     an ACK, then send the extended command parameters
     """
@@ -481,11 +498,11 @@ class ufr:
     ext_len = len(ext_parms) + 1
 
     if not ext_len:
-      return(self.send_cmd(cmd, par0 = par0, par1 = par1, ext_len = 0))
+      return(self.send_cmd(cmd, par0, par1, 0))
 
-    self.send_cmd(cmd, par0 = par0, par1 = par1, ext_len = ext_len)
+    self.send_cmd(cmd, par0, par1, ext_len)
 
-    answer = self.get_answer()
+    answer = self.get_answer(timeout)
 
     if not answer.is_ack or answer.code != cmd.value:
       raise ValueError("expected ACK to {}, ext_len={}, "
@@ -496,7 +513,7 @@ class ufr:
 
 
 
-  def get_answer(self):
+  def get_answer(self, timeout = None):
     """Get an answer packet
     """
 
@@ -506,7 +523,7 @@ class ufr:
 
       # Read data if the receive buffer is empty
       if not self.recbuf:
-        data = self._get_data()
+        data = self._get_data(timeout)
         self.recbuf.extend(data)
 
       # Parse the receive buffer
@@ -603,12 +620,12 @@ class ufr:
 
 
 
-  def get_last_command_response(self):
+  def get_last_command_response(self, timeout = None):
     """Get a responde to the last command sent. Throw an exception if the
     answer is unexpected
     """
 
-    answer = self.get_answer()
+    answer = self.get_answer(timeout)
     if not answer.is_rsp or answer.code != self.last_cmd:
       raise ValueError("expected response to {} - got {}".format(
 			self.last_cmd.name, answer.printable()))
@@ -633,7 +650,8 @@ class ufr:
     if self.tcpsock is not None:
       self.tcpsock.close()
 
-    self.timeout = None
+    self.default_timeout = None
+    self.current_timeout = None
 
 
   def __del__(self):
@@ -643,42 +661,42 @@ class ufr:
 
 
   # Front-end API functions - added as needed
-  def get_reader_type(self):
+  def get_reader_type(self, timeout = None):
 
     self.send_cmd(ufrcmd.GET_READER_TYPE)
-    rsp = self.get_last_command_response()
+    rsp = self.get_last_command_response(timeout)
     return(rsp.ext[0] + (rsp.ext[1] << 8) + \
 		(rsp.ext[2] << 16) + (rsp.ext[3] << 24))
 
-  def get_serial_number(self):
+  def get_serial_number(self, timeout = None):
 
     self.send_cmd(ufrcmd.GET_SERIAL_NUMBER)
-    rsp = self.get_last_command_response()
+    rsp = self.get_last_command_response(timeout)
     return(bytes(rsp.ext).decode("ascii"))
 
-  def get_hardware_version(self):
+  def get_hardware_version(self, timeout = None):
 
     self.send_cmd(ufrcmd.GET_HARDWARE_VERSION)
-    rsp = self.get_last_command_response()
+    rsp = self.get_last_command_response(timeout)
     return((rsp.val0 << 8) + rsp.val1)
 
-  def get_firmware_version(self):
+  def get_firmware_version(self, timeout = None):
 
     self.send_cmd(ufrcmd.GET_FIRMWARE_VERSION)
-    rsp = self.get_last_command_response()
+    rsp = self.get_last_command_response(timeout)
     return((rsp.val0 << 8) + rsp.val1)
 
-  def get_build_number(self):
+  def get_build_number(self, timeout = None):
 
     self.send_cmd(ufrcmd.GET_BUILD_NUMBER)
-    rsp = self.get_last_command_response()
+    rsp = self.get_last_command_response(timeout)
     return(rsp.val0)
 
-  def get_card_id_ex(self):
+  def get_card_id_ex(self, timeout = None):
 
     self.send_cmd(ufrcmd.GET_CARD_ID_EX)
     try:
-      rsp = self.get_last_command_response()
+      rsp = self.get_last_command_response(timeout)
     except:
       if self.answer.code == ufrerr.NO_CARD:
         return(None)
@@ -686,40 +704,40 @@ class ufr:
         raise
     return(":".join(["{:02X}".format(v) for v in rsp.ext[:rsp.val1]]))
 
-  def get_analog_settings(self, tag_comm_type):
+  def get_analog_settings(self, tag_comm_type, timeout = None):
 
     self.send_cmd(ufrcmd.GET_RF_ANALOG_SETTINGS, tag_comm_type)
-    rsp = self.get_last_command_response()
+    rsp = self.get_last_command_response(timeout)
     return(rsp.ext)
 
-  def set_analog_settings(self, tag_comm_type, factory_settings, settings):
-
+  def set_analog_settings(self, tag_comm_type, factory_settings, settings,
+				timeout = None):
     self.send_cmd_ext(ufrcmd.SET_RF_ANALOG_SETTINGS, tag_comm_type,
-			1 if factory_settings else 0, settings)
-    rsp = self.get_last_command_response()
+			1 if factory_settings else 0, settings, timeout)
+    rsp = self.get_last_command_response(timeout)
 
-  def enter_sleep_mode(self):
+  def enter_sleep_mode(self, timeout = None):
 
     self.send_cmd(ufrcmd.ENTER_SLEEP_MODE)
-    rsp = self.get_last_command_response()
+    rsp = self.get_last_command_response(timeout)
 
-  def leave_sleep_mode(self):
+  def leave_sleep_mode(self, timeout = None):
 
     self._send_data((WAKE_UP_BYTE,))
     sleep(WAKE_UP_WAIT)
     self.send_cmd(ufrcmd.LEAVE_SLEEP_MODE)
-    rsp = self.get_last_command_response()
+    rsp = self.get_last_command_response(timeout)
     sleep(POST_WAKE_UP_WAIT)
 
-  def rf_reset(self):
+  def rf_reset(self, timeout = None):
 
     self.send_cmd(ufrcmd.RF_RESET)
-    rsp = self.get_last_command_response()
+    rsp = self.get_last_command_response(timeout)
 
-  def self_reset(self):
+  def self_reset(self, timeout = None):
 
     self.send_cmd(ufrcmd.SELF_RESET)
-    rsp = self.get_last_command_response()
+    rsp = self.get_last_command_response(timeout)
     sleep(POST_SELF_RESET_WAIT)
 
 
@@ -739,10 +757,10 @@ if __name__ == "__main__":
   
   for tct in tuple(map(int, ufrtagcommtype)):
     print("GET_RF_ANALOG_SETTINGS: ", ufr.get_analog_settings(tct))
-#    new_settings = list(ufr.answer.ext)
-#    new_settings[pn53xanalogsettingsreg.RXTHRESHOLD] = 255
-#    print("SET_RF_ANALOG_SETTINGS")
-#    ufr.set_analog_settings(tct, False, new_settings)
+    new_settings = list(ufr.answer.ext)
+    new_settings[pn53xanalogsettingsreg.RXTHRESHOLD] = 255
+    print("SET_RF_ANALOG_SETTINGS")
+    ufr.set_analog_settings(tct, False, new_settings)
 
   print("SELF_RESET")
   ufr.self_reset()
