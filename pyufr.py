@@ -666,6 +666,10 @@ class ufr:
 
     if self.tcpsock is not None:
       self.tcpsock.close()
+      self.tcpsock = None
+
+    self.resturl = None
+    self.postdata = None
 
     self.default_timeout = None
     self.current_timeout = None
