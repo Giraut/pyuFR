@@ -8,29 +8,35 @@ default_ufr_device = "serial:///dev/ttyUSB0:1000000"	# Nano USB serial
 #default_ufr_device = "tcp://ufr:8881"			# Nano Online slave TCP
 #default_ufr_device = "http://ufr/uart1"		# Nano Online REST UART1
 default_ufr_timeout = 1 #s
-nano_online_support = False
 
 # API tests
 test_network_probe_functions  = False
 test_eeprom_writing_functions = False
 test_reset_functions          = True
 test_sleep_functions          = True
+test_led_sound_functions      = True
 test_uid_functions            = True
 
 
 
 ### Modules
 import re
+import requests
 from time import sleep
 from enum import IntEnum
-from serial import Serial
+from datetime import datetime
+from multiprocessing.pool import ThreadPool
+from socket import socket, gethostbyname, AF_INET, SOCK_DGRAM, SOCK_STREAM
 
-if nano_online_support:
-  import requests
-  from datetime import datetime
+# Try to import optional modules but fail silently if they're not needed later
+try:
+  from serial import Serial
+except:
+  pass
+try:
   from ipaddress import ip_network
-  from multiprocessing.pool import ThreadPool
-  from socket import socket, gethostbyname, AF_INET, SOCK_DGRAM, SOCK_STREAM
+except:
+  pass
 
 
 
@@ -256,6 +262,21 @@ class pn53xanalogsettingsreg(IntEnum):
   GSNOFF                                  = 4
   MODGSP                                  = 4
 
+class ufrlightsignal(IntEnum):
+  NONE                                    = 0
+  LONG_GREEN                              = 1
+  LONG_RED                                = 2
+  ALTERNATION                             = 3
+  FLASH                                   = 4
+
+class ufrbeepsignal(IntEnum):
+  NONE                                    = 0
+  SHORT                                   = 1
+  LONG                                    = 2
+  DOUBLE_SHORT                            = 3
+  TRIPLE_SHORT                            = 4
+  TRIPLET_MELODY                           = 5
+
 
 
 ### Defines
@@ -360,38 +381,44 @@ class ufr:
     http://<host>/uartX
     """
 
-    # Open a device using the serial, UDP, TCP or HTTP method
+    # Find out the protocol and associated parameters
     m = re.findall("^(serial|udp|tcp)://(.+):([0-9]+)/*$", dev)
     if m:
       proto, devhost, baudport = m[0]
+    else:
+      m = re.findall("^(http://.+/uart[12])/*$", dev)
+      if m:
+        proto = "http"
+        url = m[0]
+      else:
+        proto = None
 
-      if proto == "serial":
-        self.serdev = Serial(devhost, baudport, timeout = timeout)
+    # Open the device
+    if proto == "serial":
+      self.serdev = Serial(devhost, baudport, timeout = timeout)
 
-      elif proto == "udp":
-        self.udpsock = socket(AF_INET, SOCK_DGRAM) 
-        self.udpsock.settimeout(timeout)
-        self.udphost = gethostbyname(devhost)
-        self.udpport = int(baudport)
+    elif proto == "udp":
+      self.udpsock = socket(AF_INET, SOCK_DGRAM)
+      self.udpsock.settimeout(timeout)
+      self.udphost = gethostbyname(devhost)
+      self.udpport = int(baudport)
 
-      elif proto == "tcp":
-        self.tcpsock = socket(AF_INET, SOCK_STREAM) 
-        self.tcpsock.settimeout(timeout)
-        self.tcpsock.connect((gethostbyname(devhost), int(baudport)))
+    elif proto == "tcp":
+      self.tcpsock = socket(AF_INET, SOCK_STREAM)
+      self.tcpsock.settimeout(timeout)
+      self.tcpsock.connect((gethostbyname(devhost), int(baudport)))
 
-      self.default_timeout = timeout
-      self.current_timeout = timeout
+    elif proto == "http":
+      self.resturl = url
+
+    else:
+      raise ValueError("unknown uFR device {}".format(dev))
       return
 
-    m = re.findall("^(http://.+/uart[12])/*$", dev)
-    if m:
-      self.resturl = m[0]
+    self.default_timeout = timeout
+    self.current_timeout = timeout
+    return
 
-      self.default_timeout = timeout
-      self.current_timeout = timeout
-      return
-
-    raise ValueError("unknown uFR device {}".format(dev))
 
 
   def _checksum(self, data):
@@ -784,6 +811,10 @@ class ufr:
 			1 if factory_settings else 0, settings, timeout)
     rsp = self.get_last_command_response(timeout)
 
+  def set_led_config(self, blink, timeout = None):
+    self.send_cmd(ufrcmd.SET_LED_CONFIG, 1 if blink else 0)
+    rsp = self.get_last_command_response(timeout)
+
   def enter_sleep_mode(self, timeout = None):
 
     self.send_cmd(ufrcmd.ENTER_SLEEP_MODE)
@@ -808,6 +839,30 @@ class ufr:
     rsp = self.get_last_command_response(timeout)
     sleep(POST_SELF_RESET_WAIT)
 
+  def red_light_control(self, state, timeout = None):
+
+    self.send_cmd(ufrcmd.RED_LIGHT_CONTROL, 1 if state else 0)
+    rsp = self.get_last_command_response(timeout)
+
+  def user_interface_signal(self, light_signal_mode, beep_signal_mode,
+				timeout = None):
+    self.send_cmd(ufrcmd.USER_INTERFACE_SIGNAL, light_signal_mode.value,
+			beep_signal_mode.value)
+    rsp = self.get_last_command_response(timeout)
+
+  def set_speaker_frequency(self, frequency, timeout = None):
+
+    period = ((round(65535 - 1500000 / (2 * frequency))) & 0xffff) \
+		if frequency else 0xffff
+    self.send_cmd(ufrcmd.SET_SPEAKER_FREQUENCY, period & 0xff, period >> 8)
+    rsp = self.get_last_command_response(timeout)
+
+  def esp_set_display_data(self, rgb1, rgb2, duration, timeout = None):
+
+    self.send_cmd_ext(ufrcmd.ESP_SET_DISPLAY_DATA,
+			duration & 0xff, duration >> 8, rgb1 + rgb2, timeout)
+    rsp = self.get_last_command_response(timeout)
+
 
 
 ### Test routine
@@ -816,19 +871,20 @@ if __name__ == "__main__":
   """
 
   ufr = ufr()
-  ufr.open()
 
   if test_network_probe_functions:
     print("IS_HOST_NANO_ONLINE:       ", ufr.is_host_nano_online("ufr"))
     print("PROBE_SUBNET_NANO_ONLINES: ",
 			ufr.probe_subnet_nano_onlines("192.168.1.0/24"))
 
+  ufr.open()
+
   print("GET_READER_TYPE:           ", hex(ufr.get_reader_type()))
   print("GET_SERIAL_NUMBER:         ", ufr.get_serial_number())
   print("GET_HARDWARE_VERSION:      ", hex(ufr.get_hardware_version()))
   print("GET_FIRMWARE_VERSION:      ", hex(ufr.get_firmware_version()))
   print("GET_BUILD_NUMBER:          ", hex(ufr.get_build_number()))
-  
+
   for tct in map(int, ufrtagcommtype):
     print("GET_RF_ANALOG_SETTINGS: ", ufr.get_analog_settings(tct))
 
@@ -837,6 +893,8 @@ if __name__ == "__main__":
       new_settings[pn53xanalogsettingsreg.RXTHRESHOLD] = 255
       print("SET_RF_ANALOG_SETTINGS")
       ufr.set_analog_settings(tct, False, new_settings)
+      print("SET_LED_CONFIG")
+      ufr.set_led_config(True)
 
   if test_reset_functions:
     print("SELF_RESET")
@@ -848,6 +906,31 @@ if __name__ == "__main__":
       ufr.enter_sleep_mode()
       print("LEAVE_SLEEP_MODE")
       ufr.leave_sleep_mode()
+
+  if test_led_sound_functions:
+    print("RED_LIGHT_CONTROL")
+    ufr.red_light_control(True)
+    sleep(2)
+    ufr.red_light_control(False)
+    print("SET_SPEAKER_FREQUENCY")
+    freq = 1480 / 4
+    for i in range(3):
+      ufr.set_speaker_frequency(freq)
+      freq *= 2
+      sleep(.1)
+    ufr.set_speaker_frequency(0)
+    print("USER_INTERFACE_SIGNAL")
+    ufr.user_interface_signal(ufrlightsignal.ALTERNATION, ufrbeepsignal.SHORT)
+    if ufr.udpsock is not None or ufr.tcpsock is not None:
+      print("ESP_SET_DISPLAY_DATA")
+      for i in range(3):
+        ufr.esp_set_display_data((0xff, 0, 0), (0, 0xff, 0), 0)
+        sleep(0.1)
+        ufr.esp_set_display_data((0, 0xff, 0), (0, 0, 0xff), 0)
+        sleep(0.1)
+        ufr.esp_set_display_data((0, 0, 0xff), (0xff, 0, 0), 0)
+        sleep(0.1)
+      ufr.esp_set_display_data((0, 0, 0), (0, 0, 0), 1000)
 
   if test_uid_functions:
     for i in range(10):
