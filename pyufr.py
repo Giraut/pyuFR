@@ -275,7 +275,7 @@ class ufrbeepsignal(IntEnum):
   LONG                                    = 2
   DOUBLE_SHORT                            = 3
   TRIPLE_SHORT                            = 4
-  TRIPLET_MELODY                           = 5
+  TRIPLET_MELODY                          = 5
 
 
 
