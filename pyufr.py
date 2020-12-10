@@ -15,6 +15,7 @@ test_eeprom_writing_functions = False
 test_reset_functions          = True
 test_sleep_functions          = True
 test_led_sound_functions      = True
+test_esp_io                   = True
 test_uid_functions            = True
 
 
@@ -285,6 +286,11 @@ class ufrbeepsignal(IntEnum):
   TRIPLE_SHORT                            = 4
   TRIPLET_MELODY                          = 5
 
+class ufriostate(IntEnum):
+  LOW                                     = 0
+  HIGH                                    = 1
+  INPUT                                   = 2
+
 
 
 ### Defines
@@ -294,6 +300,7 @@ ufr_cmd_vals = tuple(map(int, ufrcmd))
 ufr_err_vals = tuple(map(int, ufrerr))
 ufr_val_to_cmd = {cmd.value: cmd for cmd in ufrcmd}
 ufr_val_to_err = {err.value: err for err in ufrerr}
+ufr_val_to_iostate = {iostate.value: iostate for iostate in ufriostate}
 
 # Number of concurrent connection when scanning a subnet for Nano Onlines
 subnet_probe_concurrent_connections = 100
@@ -880,6 +887,17 @@ class ufr:
     self.send_cmd(ufrcmd.SET_ISO14443_4_MODE)
     rsp = self.get_last_command_response(timeout)
 
+  def esp_set_io_state(self, pin, state, timeout = None):
+
+    self.send_cmd(ufrcmd.ESP_SET_IO_STATE, pin, state.value)
+    rsp = self.get_last_command_response(timeout)
+
+  def esp_get_io_state(self, timeout = None):
+
+    self.send_cmd(ufrcmd.ESP_GET_IO_STATE)
+    rsp = self.get_last_command_response(timeout)
+    return([ufr_val_to_iostate[st] for st in rsp.ext])
+
   def esp_set_display_data(self, rgb1, rgb2, duration, timeout = None):
 
     self.send_cmd_ext(ufrcmd.ESP_SET_DISPLAY_DATA,
@@ -954,6 +972,14 @@ if __name__ == "__main__":
         ufr.esp_set_display_data((0, 0, 0xff), (0xff, 0, 0), 0)
         sleep(0.1)
       ufr.esp_set_display_data((0, 0, 0), (0, 0, 0), 1000)
+
+  if test_esp_io and (ufr.udpsock is not None or ufr.tcpsock):
+    print("ESP_SET_IO_STATE")
+    ufr.esp_set_io_state(6, ufriostate.HIGH)
+    print("ESP_GET_IO_STATE", ufr.esp_get_io_state())
+    print("ESP_SET_IO_STATE")
+    ufr.esp_set_io_state(6, ufriostate.LOW)
+    print("ESP_GET_IO_STATE", ufr.esp_get_io_state())
 
   if test_uid_functions:
     for i in range(10):
