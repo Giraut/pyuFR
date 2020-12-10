@@ -312,8 +312,8 @@ WAKE_UP_BYTE         = 0
 WAKE_UP_WAIT         = .01 #s
 POST_WAKE_UP_WAIT    = .1 #s	Apparently needed by the reader
 
-# Soft restart parameters
-POST_SELF_RESET_WAIT = .1 #s	Apparently needed by the reader
+# Soft reader restart and hard reader reset parameters
+POST_RESET_WAIT = .1 #s		Apparently needed by the reader
 
 
 
@@ -852,7 +852,7 @@ class ufr:
 
     self.send_cmd(ufrcmd.SELF_RESET)
     rsp = self.get_last_command_response(timeout)
-    sleep(POST_SELF_RESET_WAIT)
+    sleep(POST_RESET_WAIT)
 
   def tag_emulation_start(self, timeout = None):
 
@@ -904,6 +904,12 @@ class ufr:
 			duration & 0xff, duration >> 8, rgb1 + rgb2, timeout)
     rsp = self.get_last_command_response(timeout)
 
+  def esp_reader_reset(self, timeout = None):
+
+    self.send_cmd(ufrcmd.ESP_READER_RESET, 0)
+    rsp = self.get_last_command_response(timeout)
+    sleep(POST_RESET_WAIT)
+
 
 
 ### Test routine
@@ -940,6 +946,9 @@ if __name__ == "__main__":
   if test_reset_functions:
     print("SELF_RESET")
     ufr.self_reset()
+    if ufr.udpsock is not None or ufr.tcpsock:
+      print("ESP_READER_RESET")
+      ufr.esp_reader_reset()
 
   if test_sleep_functions:
     if ufr.tcpsock is None and ufr.resturl is None:
