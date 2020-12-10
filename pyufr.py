@@ -138,6 +138,14 @@ class ufrcmd(IntEnum):
   LEAVE_SLEEP_MODE                        = 0x47
   AUTO_SLEEP_SET                          = 0x4d
   AUTO_SLEEP_GET                          = 0x4e
+  WRITE_EMULATION_NDEF                    = 0x4a
+  TAG_EMULATION_START                     = 0x48
+  TAG_EMULATION_STOP                      = 0x49
+  AD_HOC_EMULATION_START                  = 0x76
+  AD_HOC_EMULATION_STOP                   = 0x77
+  GET_EXTERNAL_FIELD                      = 0x9f
+  GET_AD_HOC_EMULATION_PARAMS             = 0x9d
+  SET_AD_HOC_EMULATION_PARAMS             = 0x9e
   SET_DISPLAY_DATA                        = 0x72
   SET_SPEAKER_FREQUENCY                   = 0x73
   SET_DISPLAY_INTENSITY                   = 0x74
@@ -152,7 +160,7 @@ class ufrcmd(IntEnum):
   I_BLOCK_TRANSCEIVE                      = 0x90
   R_BLOCK_TRANSCEIVE                      = 0x91
   S_BLOCK_DESELECT                        = 0x92
-  SET_ISO14433_4_MODE                     = 0x93
+  SET_ISO14443_4_MODE                     = 0x93
   APDU_TRANSCEIVE                         = 0x94
   ESP_SET_IO_STATE                        = 0xf3
   ESP_GET_IO_STATE                        = 0xf4
@@ -839,6 +847,16 @@ class ufr:
     rsp = self.get_last_command_response(timeout)
     sleep(POST_SELF_RESET_WAIT)
 
+  def tag_emulation_start(self, timeout = None):
+
+    self.send_cmd(ufrcmd.TAG_EMULATION_START)
+    rsp = self.get_last_command_response(timeout)
+
+  def tag_emulation_stop(self, timeout = None):
+
+    self.send_cmd(ufrcmd.TAG_EMULATION_STOP)
+    rsp = self.get_last_command_response(timeout)
+
   def red_light_control(self, state, timeout = None):
 
     self.send_cmd(ufrcmd.RED_LIGHT_CONTROL, 1 if state else 0)
@@ -855,6 +873,11 @@ class ufr:
     period = ((round(65535 - 1500000 / (2 * frequency))) & 0xffff) \
 		if frequency else 0xffff
     self.send_cmd(ufrcmd.SET_SPEAKER_FREQUENCY, period & 0xff, period >> 8)
+    rsp = self.get_last_command_response(timeout)
+
+  def set_iso14443_4_mode(self, timeout = None):
+
+    self.send_cmd(ufrcmd.SET_ISO14443_4_MODE)
     rsp = self.get_last_command_response(timeout)
 
   def esp_set_display_data(self, rgb1, rgb2, duration, timeout = None):
@@ -876,8 +899,6 @@ if __name__ == "__main__":
     print("IS_HOST_NANO_ONLINE:       ", ufr.is_host_nano_online("ufr"))
     print("PROBE_SUBNET_NANO_ONLINES: ",
 			ufr.probe_subnet_nano_onlines("192.168.1.0/24"))
-
-  ufr.open()
 
   print("GET_READER_TYPE:           ", hex(ufr.get_reader_type()))
   print("GET_SERIAL_NUMBER:         ", ufr.get_serial_number())
