@@ -900,6 +900,8 @@ if __name__ == "__main__":
     print("PROBE_SUBNET_NANO_ONLINES: ",
 			ufr.probe_subnet_nano_onlines("192.168.1.0/24"))
 
+  ufr.rf_reset()
+
   print("GET_READER_TYPE:           ", hex(ufr.get_reader_type()))
   print("GET_SERIAL_NUMBER:         ", ufr.get_serial_number())
   print("GET_HARDWARE_VERSION:      ", hex(ufr.get_hardware_version()))
