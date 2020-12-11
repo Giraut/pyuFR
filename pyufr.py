@@ -900,7 +900,7 @@ class ufr:
       raise ValueError("NDEF too long")
 
     # Split the ndef into 240-byte-long parts
-    ext_parts = [ndef[i:i + 240] for i in range(0, len(ndef), 240)]
+    ext_parts = [ndef[i:i + 240] for i in range(0, ndeflen, 240)]
     if not ext_parts:
       ext_parts = [b""]
 
