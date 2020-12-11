@@ -16,6 +16,7 @@ test_reset_functions          = True
 test_sleep_functions          = True
 test_led_sound_functions      = True
 test_esp_io                   = True
+test_anti_collision_functions = True
 test_uid_functions            = True
 test_tag_emulation            = True
 
@@ -168,6 +169,13 @@ class ufrcmd(IntEnum):
   S_BLOCK_DESELECT                        = 0x92
   SET_ISO14443_4_MODE                     = 0x93
   APDU_TRANSCEIVE                         = 0x94
+  ENABLE_ANTI_COLLISION                   = 0x2d
+  DISABLE_ANTI_COLLISION                  = 0x2e
+  ENUM_CARDS                              = 0x37
+  LIST_CARDS                              = 0x38
+  SELECT_CARD                             = 0x39
+  DESELECT_CARD                           = 0x3a
+  GET_ANTI_COLLISION_STATUS               = 0x3b
   ESP_SET_IO_STATE                        = 0xf3
   ESP_GET_IO_STATE                        = 0xf4
   ESP_READER_TIME_WRITE                   = 0xf5
@@ -215,7 +223,7 @@ class ufrerr(IntEnum):
   DEVICE_EEPROM_BUSY                      = 0x7b
   RTC_SET_ERROR                           = 0x7c
   EEPROM_ERROR                            = 0x7d
-  NO_CARDS_ENUMERRATED                    = 0x7e
+  NO_CARDS_ENUMERATED                     = 0x7e
   CARD_ALREADY_SELECTED                   = 0x7f
   WRONG_CARD_TYPE                         = 0x80
   FORBIDDEN_IN_TAG_EMULATION_MODE         = 0x90
@@ -241,6 +249,37 @@ class ufrerr(IntEnum):
   NT4H_BOUNDARY_ERROR                     = 0xc9
   NT4H_INVALID_MAC                        = 0xca
   NT4H_NO_CHANGES                         = 0xcb
+
+class ufrcardtype(IntEnum):
+  MIFARE_ULTRALIGHT                       = 0x01
+  MIFARE_ULTRALIGHT_EV1_11                = 0x02
+  MIFARE_ULTRALIGHT_EV1_21                = 0x03
+  MIFARE_ULTRALIGHT_C                     = 0x04
+  NTAG_203                                = 0x05
+  NTAG_210                                = 0x06
+  NTAG_212                                = 0x07
+  NTAG_213                                = 0x08
+  NTAG_215                                = 0x09
+  NTAG_216                                = 0x0a
+  MIKRON_MIK640D                          = 0x0b
+  NFC_T2T_GENERIC                         = 0x0c
+  MIFARE_MINI                             = 0x20
+  MIFARE_CLASSIC_1K                       = 0x21
+  MIFARE_CLASSIC_4K                       = 0x22
+  MIFARE_PLUS_S_2K                        = 0x23
+  MIFARE_PLUS_S_4K                        = 0x24
+  MIFARE_PLUS_X_2K                        = 0x25
+  MIFARE_PLUS_X_4K                        = 0x26
+  MIFARE_DESFIRE                          = 0x27
+  MIFARE_DESFIRE_EV1_2K                   = 0x28
+  MIFARE_DESFIRE_EV1_4K                   = 0x29
+  MIFARE_DESFIRE_EV1_8K                   = 0x2a
+  MIFARE_DESFIRE_EV2_2K                   = 0x2b
+  MIFARE_DESFIRE_EV2_4K                   = 0x2c
+  MIFARE_DESFIRE_EV2_8K                   = 0x2d
+  GENERIC_ISO14443_4                      = 0x40
+  GENERIC_ISO14443_TYPE_B                 = 0x41
+  IMEI_UID                                = 0x80
 
 class ufrauthmode(IntEnum):
   RKA_AUTH1A                              = 0x00
@@ -303,6 +342,7 @@ ufr_header_vals = tuple(map(int, ufrhead))
 ufr_trailer_vals = tuple(map(int, ufrtrail)) 
 ufr_cmd_vals = tuple(map(int, ufrcmd))
 ufr_err_vals = tuple(map(int, ufrerr))
+ufr_val_to_card_type = {cardtype.value: cardtype for cardtype in ufrcardtype}
 ufr_val_to_cmd = {cmd.value: cmd for cmd in ufrcmd}
 ufr_val_to_err = {err.value: err for err in ufrerr}
 ufr_val_to_iostate = {iostate.value: iostate for iostate in ufriostate}
@@ -950,6 +990,16 @@ class ufr:
     self.send_cmd(ufrcmd.TAG_EMULATION_STOP)
     rsp = self.get_last_command_response(timeout)
 
+  def ad_hoc_emulation_start(self, timeout = None):
+
+    self.send_cmd(ufrcmd.AD_HOC_EMULATION_START)
+    rsp = self.get_last_command_response(timeout)
+
+  def ad_hoc_emulation_stop(self, timeout = None):
+
+    self.send_cmd(ufrcmd.AD_HOC_EMULATION_STOP)
+    rsp = self.get_last_command_response(timeout)
+
   def red_light_control(self, state, timeout = None):
 
     self.send_cmd(ufrcmd.RED_LIGHT_CONTROL, 1 if state else 0)
@@ -972,6 +1022,60 @@ class ufr:
 
     self.send_cmd(ufrcmd.SET_ISO14443_4_MODE)
     rsp = self.get_last_command_response(timeout)
+
+  def enable_anti_collision(self, timeout = None):
+
+    self.send_cmd(ufrcmd.ENABLE_ANTI_COLLISION)
+    rsp = self.get_last_command_response(timeout)
+
+  def disable_anti_collision(self, timeout = None):
+
+    self.send_cmd(ufrcmd.DISABLE_ANTI_COLLISION)
+    rsp = self.get_last_command_response(timeout)
+
+  def enum_cards(self, timeout = None):
+
+    self.send_cmd(ufrcmd.ENUM_CARDS)
+    try:
+      rsp = self.get_last_command_response(timeout)
+    except:
+      if self.answer.code == ufrerr.NO_CARDS_ENUMERATED:
+        return(False)
+      else:
+        raise
+    return(True)
+
+  def list_cards(self, timeout = None):
+
+    self.send_cmd(ufrcmd.LIST_CARDS)
+    try:
+      rsp = self.get_last_command_response(timeout)
+    except:
+      if self.answer.code == ufrerr.NO_CARDS_ENUMERATED:
+        return([])
+      else:
+        raise
+    return([":".join(["{:02X}".format(v) \
+		for v in rsp.ext[i + 1:i + rsp.ext[i] + 1]]) \
+		for i in range(0, len(rsp.ext), 11)])
+
+  def select_card(self, uid, timeout = None):
+
+    uid = [int(v, 16) for v in uid.split(":")]
+    self.send_cmd_ext(ufrcmd.SELECT_CARD, len(uid), 0, uid, timeout)
+    rsp = self.get_last_command_response(timeout)
+    return(ufr_val_to_card_type[rsp.val0])
+
+  def deselect_card(self, timeout = None):
+
+    self.send_cmd(ufrcmd.DESELECT_CARD)
+    rsp = self.get_last_command_response(timeout)
+
+  def get_anti_collision_status(self, timeout = None):
+
+    self.send_cmd(ufrcmd.GET_ANTI_COLLISION_STATUS)
+    rsp = self.get_last_command_response(timeout)
+    return(rsp.val0 != 0, rsp.val1 != 0)
 
   def esp_set_io_state(self, pin, state, timeout = None):
 
@@ -1017,6 +1121,11 @@ if __name__ == "__main__":
   print("GET_HARDWARE_VERSION:      ", hex(ufr.get_hardware_version()))
   print("GET_FIRMWARE_VERSION:      ", hex(ufr.get_firmware_version()))
   print("GET_BUILD_NUMBER:          ", hex(ufr.get_build_number()))
+
+  print("AD_HOC_EMULATION_START")
+  ufr.ad_hoc_emulation_start()
+  print("AD_HOC_EMULATION_STOP")
+  ufr.ad_hoc_emulation_stop()
 
   for tct in map(int, ufrtagcommtype):
     print("GET_RF_ANALOG_SETTINGS: ", ufr.get_analog_settings(tct))
@@ -1075,6 +1184,23 @@ if __name__ == "__main__":
     print("ESP_SET_IO_STATE")
     ufr.esp_set_io_state(6, ufriostate.LOW)
     print("ESP_GET_IO_STATE", ufr.esp_get_io_state())
+
+  if test_anti_collision_functions:
+    print("ENABLE_ANTI_COLLISION")
+    ufr.enable_anti_collision()
+    print("GET_ANTI_COLLISION_STATUS:   ", ufr.get_anti_collision_status())
+    print("ENUM_CARDS:                  ", ufr.enum_cards())
+    uids = ufr.list_cards()
+    print("LIST_CARDS:                  ", uids)
+    if uids:
+      print("SELECT CARD:                 ", ufr.select_card(uids[0]))
+      print("GET_ANTI_COLLISION_STATUS:   ", ufr.get_anti_collision_status())
+      print("DESELECT CARD")
+      ufr.deselect_card()
+      print("GET_ANTI_COLLISION_STATUS:   ", ufr.get_anti_collision_status())
+    print("DISABLE_ANTI_COLLISION")
+    ufr.disable_anti_collision()
+    print("GET_ANTI_COLLISION_STATUS:   ", ufr.get_anti_collision_status())
 
   if test_uid_functions:
     for i in range(10):
