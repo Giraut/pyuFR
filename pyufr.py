@@ -940,7 +940,6 @@ class ufr:
     rsp = self.get_last_command_response(timeout)
     sleep(post_write_emulation_ndef_wait)
 
-
   def tag_emulation_start(self, ram_ndef = False, timeout = None):
 
     self.send_cmd(ufrcmd.TAG_EMULATION_START, 1 if ram_ndef else 0)
