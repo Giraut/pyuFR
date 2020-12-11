@@ -17,6 +17,7 @@ test_sleep_functions          = True
 test_led_sound_functions      = True
 test_esp_io                   = True
 test_uid_functions            = True
+test_tag_emulation            = True
 
 
 
@@ -47,6 +48,10 @@ class ufrhead(IntEnum):
   ACK_HEADER                              = 0xac
   RESPONSE_HEADER                         = 0xde
   ERR_HEADER                              = 0xec
+
+class ufrcmdextpartack(IntEnum):
+  ACK_PART                                = 0xad
+  ACK_LAST_PART                           = 0xdd
 
 class ufrtrail(IntEnum):
   CMD_TRAILER                             = 0xaa
@@ -308,12 +313,15 @@ subnet_probe_concurrent_connections = 100
 
 
 # Leave sleep mode parameters
-WAKE_UP_BYTE         = 0
-WAKE_UP_WAIT         = .01 #s
-POST_WAKE_UP_WAIT    = .1 #s	Apparently needed by the reader
+WAKE_UP_BYTE                   = 0x00
+wake_up_wait                   = .01 #s
+post_wake_up_wait              = .1 #s	Apparently needed by the reader
 
 # Soft reader restart and hard reader reset parameters
-POST_RESET_WAIT = .1 #s		Apparently needed by the reader
+post_reset_wait                = .1 #s	Apparently needed by the reader
+
+# Write emulation NDEF parameters
+post_write_emulation_ndef_wait = .1 #s	Apparently needed after writing EEPROM
 
 
 
@@ -679,6 +687,36 @@ class ufr:
 
 
 
+  def get_cmd_ext_part_ack(self, timeout = None):
+    """Get a multipart CMD_EXT acknowledgment.
+    Return True if it's a part acknowledgment, False if it's the last part.
+    If we get anything else, raise an exception.
+    """
+
+    # Read data if the receive buffer is empty
+    if not self.recbuf:
+      data = self._get_data(timeout)
+      self.recbuf.extend(data)
+
+    # Parse one byte
+    b = self.recbuf.pop(0)
+
+    # Did we get an ACK?
+    if b == ufrcmdextpartack.ACK_PART:
+      return(True)
+    if b == ufrcmdextpartack.ACK_LAST_PART:
+      return(False)
+
+    # We got an expected byte
+    raise ValueError("expected {} ({:02x}h) or {} ({:02x}h) - got {:02x}h".
+			format(ufrcmdextpartack.ACK_PART.name,
+			ufrcmdextpartack.ACK_PART.value,
+			ufrcmdextpartack.ACK_LAST_PART.name,
+			ufrcmdextpartack.ACK_LAST_PART.value,
+			b))
+
+
+
   def get_last_command_response(self, timeout = None):
     """Get a responde to the last command sent. Throw an exception if the
     answer is unexpected
@@ -838,10 +876,10 @@ class ufr:
   def leave_sleep_mode(self, timeout = None):
 
     self._send_data((WAKE_UP_BYTE,))
-    sleep(WAKE_UP_WAIT)
+    sleep(wake_up_wait)
     self.send_cmd(ufrcmd.LEAVE_SLEEP_MODE)
     rsp = self.get_last_command_response(timeout)
-    sleep(POST_WAKE_UP_WAIT)
+    sleep(post_wake_up_wait)
 
   def rf_reset(self, timeout = None):
 
@@ -852,11 +890,60 @@ class ufr:
 
     self.send_cmd(ufrcmd.SELF_RESET)
     rsp = self.get_last_command_response(timeout)
-    sleep(POST_RESET_WAIT)
+    sleep(post_reset_wait)
 
-  def tag_emulation_start(self, timeout = None):
+  def write_emulation_ndef(self, ndef, in_ram = False, timeout = None):
 
-    self.send_cmd(ufrcmd.TAG_EMULATION_START)
+    ndeflen = len(ndef)
+
+    if (not in_ram and ndeflen > 144) or (in_ram and ndeflen > 1008):
+      raise ValueError("NDEF too long")
+
+    # Split the ndef into 240-byte-long parts
+    ext_parts = [ndef[i:i + 240] for i in range(0, len(ndef), 240)]
+    if not ext_parts:
+      ext_parts = [b""]
+
+    # First CMD_EXT part is prefixed with the length of the NDEF, and suffixed
+    # with the checksum of that part (but send_cmd_ext() will take care of
+    # appending the checksum)
+    ext_parts[0] = bytes([ndeflen & 0xff, ndeflen >> 8]) + ext_parts[0]
+
+    # Subsequent CMD_EXT parts are only prefixed with the length of that part
+    for i in range(1, len(ext_parts)):
+      ext_parts[i] = bytes([len(ext_parts[i])]) + ext_parts[i]
+
+    # Send the command and first CMD_EXT part
+    self.send_cmd_ext(ufrcmd.WRITE_EMULATION_NDEF, 1 if in_ram else 0, 0,
+			ext_parts.pop(0), timeout)
+
+    # Wait for ACKs and send subsequent parts if we have more than one part
+    if ext_parts:
+      while self.get_cmd_ext_part_ack(timeout):
+        if not ext_parts:
+          raise ValueError("expected {} ({:02x}h) - got {} ({:02x}h) "
+			"with no more CMD_EXT parts to send".format(
+			ufrcmdextpartack.ACK_LAST_PART.name,
+			ufrcmdextpartack.ACK_LAST_PART.value,
+			ufrcmdextpartack.ACK_PART.name,
+			ufrcmdextpartack.ACK_PART.value))
+        self._send_data(ext_parts.pop(0))
+
+    if ext_parts:
+      raise ValueError("expected {} ({:02x}h) - got {} ({:02x}h) "
+			"before sending the last CMD_EXT part".format(
+			ufrcmdextpartack.ACK_PART.name,
+			ufrcmdextpartack.ACK_PART.value,
+			ufrcmdextpartack.ACK_LAST_PART.name,
+			ufrcmdextpartack.ACK_LAST_PART.value))
+
+    rsp = self.get_last_command_response(timeout)
+    sleep(post_write_emulation_ndef_wait)
+
+
+  def tag_emulation_start(self, ram_ndef = False, timeout = None):
+
+    self.send_cmd(ufrcmd.TAG_EMULATION_START, 1 if ram_ndef else 0)
     rsp = self.get_last_command_response(timeout)
 
   def tag_emulation_stop(self, timeout = None):
@@ -908,7 +995,7 @@ class ufr:
 
     self.send_cmd(ufrcmd.ESP_READER_RESET, 0)
     rsp = self.get_last_command_response(timeout)
-    sleep(POST_RESET_WAIT)
+    sleep(post_reset_wait)
 
 
 
@@ -994,6 +1081,21 @@ if __name__ == "__main__":
     for i in range(10):
       print("GET_CARD_ID_EX:         ", ufr.get_card_id_ex())
       sleep(.5)
+
+  if test_tag_emulation:
+    eeprom_ndef = b"\x03\x10\xd1\x01\x0cU\x01d-logic.net\xfe"
+    ram_ndef = b"\x03\xff\x03\xeb\xc1\x01\x00\x00\x03\xe4T\x02en3456" + \
+		b"7890123456" * 99
+    if test_eeprom_writing_functions:
+      print("WRITE_EMULATION_NDEF (EEPROM)")
+      ufr.write_emulation_ndef(eeprom_ndef, False)
+    print("WRITE_EMULATION_NDEF (RAM)")
+    ufr.write_emulation_ndef(ram_ndef, True)
+  print("TAG_EMULATION_START (RAM NDEF)")
+  ufr.tag_emulation_start(True)
+  sleep(10)
+  print("TAG_EMULATION_STOP")
+  ufr.tag_emulation_stop()
 
   ufr.close()
   del(ufr)
