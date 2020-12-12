@@ -20,6 +20,8 @@ test_sleep_functions              = True
 test_led_sound_functions          = True
 test_esp_io                       = True
 test_uid_functions                = True
+test_read_functions               = True
+test_iso14443_4_functions         = True
 test_anti_collision_functions     = True
 test_tag_emulation                = True
 
@@ -294,6 +296,9 @@ class ufrdlcardtype(IntEnum):
   DL_IMEI_UID                             = 0x80
 
 class ufrauthmode(IntEnum):
+  T2T_NO_PWD_AUTH                         = 0x00
+  T2T_RKA_PWD_AUTH                        = 0x01
+  T2T_PK_PWD_AUTH                         = 0x61
   RKA_AUTH1A                              = 0x00
   RKA_AUTH1B                              = 0x01
   AKM1_AUTH1A                             = 0x20
@@ -1002,6 +1007,69 @@ class ufr:
 
 
 
+  def linear_read(self, authmode, addr, length, key = 0, multiblock = False,
+			timeout = None):
+    """Linear read from a card. Return None if no card was present in the field
+    """
+
+    # Define the command parameters
+    cmdext = [addr & 0xff, addr >> 8]
+
+    if authmode in (ufrauthmode.RKA_AUTH1A, ufrauthmode.RKA_AUTH1B):
+      par1 = key
+      if length < 192 or not multiblock:
+        cmdext.extend([length & 0xff, length >> 8])
+      else:
+        cmdext.extend([0, 192, length & 0xff, length >> 8])
+
+    elif authmode in (ufrauthmode.AKM1_AUTH1A, ufrauthmode.AKM1_AUTH1B,
+		ufrauthmode.AKM2_AUTH1A, ufrauthmode.AKM2_AUTH1B):
+      par1 = 0
+      cmdext.extend([length & 0xff, length >> 8])
+
+    elif authmode in (ufrauthmode.PK_AUTH1A, ufrauthmode.PK_AUTH1B):
+      par1 = 0
+      cmdext.extend([length & 0xff, length >> 8])
+      cmdext.extend(list(key))
+
+    elif authmode in (ufrauthmode.SAM_KEY_AUTH1A, ufrauthmode.SAM_KEY_AUTH1B):
+      par1 = key
+      if length < 192 or not multiblock:
+        cmdext.extend([length & 0xff, length >> 8])
+      else:
+        cmdext.extend([0, 192, length & 0xff, length >> 8])
+
+    elif authmode in (ufrauthmode.PK_AUTH1A_AES, ufrauthmode.PK_AUTH1B_AES):
+      par1 = 0
+      cmdext.extend([length & 0xff, length >> 8])
+      cmdext.extend(list(key))
+
+    elif authmode in (ufrauthmode.MFP_RKA_AUTH1A, ufrauthmode.MFP_RKA_AUTH1B):
+      par1 = key
+      if length < 192 or not multiblock:
+        cmdext.extend([length & 0xff, length >> 8])
+      else:
+        cmdext.extend([0, 192, length & 0xff, length >> 8])
+
+    elif authmode in (ufrauthmode.MFP_AKM1_AUTH1A, ufrauthmode.MFP_AKM1_AUTH1B,
+		ufrauthmode.MFP_AKM2_AUTH1A, ufrauthmode.MFP_AKM2_AUTH1B):
+      par1 = 0
+      cmdext.extend([length & 0xff, length >> 8])
+
+    # Send the command and read back the data
+    self._send_cmd_ext(ufrcmd.LINEAR_READ, par1, 0, cmdext, timeout)
+    try:
+      rsp = self.get_last_command_response(timeout)
+    except:
+      if self.answer.code == ufrerr.NO_CARD:
+        return(None)
+      else:
+        raise
+
+    return(bytes(rsp.ext))
+
+
+
   def get_rf_analog_settings(self, tag_comm_type, timeout = None):
     """Get the RF frontend's analog settings
     """
@@ -1203,6 +1271,28 @@ class ufr:
 
     self._send_cmd(ufrcmd.SET_ISO14443_4_MODE)
     rsp = self.get_last_command_response(timeout)
+
+
+
+  def s_block_deselect(self, timeout = None):
+    """Deselect tag and restore polling
+    """
+
+    self._send_cmd(ufrcmd.S_BLOCK_DESELECT)
+    rsp = self.get_last_command_response(timeout)
+
+
+
+  def apdu_transceive(self, c_apdu, apdu_timeout = None, timeout = None):
+    """Send a command APDU to the ISO14443-4 transponder and get the response
+    APDU
+    """
+
+    self._send_cmd_ext(ufrcmd.APDU_TRANSCEIVE, 0, self.default_timeout \
+			if apdu_timeout is None else apdu_timeout,
+			c_apdu, timeout)
+    rsp = self.get_last_command_response(timeout)
+    return(rsp.ext)
 
 
 
@@ -1483,6 +1573,21 @@ if __name__ == "__main__":
       print(padded("GET_CARD_ID_EX:"), ufr.get_card_id_ex())
       print(padded("GET_LAST_CARD_ID_EX:"), ufr.get_last_card_id_ex())
       print(padded("GET_DLOGIC_CARD_TYPE:"), ufr.get_dlogic_card_type())
+
+  # Test read functions
+  if test_read_functions:
+      print(padded("LINEAR_READ:"), ufr.linear_read(ufrauthmode.T2T_NO_PWD_AUTH,
+							0, 10))
+
+  # Get ISO14443-4 functions
+  if test_iso14443_4_functions:
+
+    print("SET_ISO_14443_4_MODE")
+    try:
+      ufr.set_iso14443_4_mode()
+    except:
+      if ufr.answer.code != ufrerr.NO_CARD:
+        raise
 
   # Anti-collision functions
   if test_anti_collision_functions:
