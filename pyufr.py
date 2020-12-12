@@ -10,15 +10,18 @@ default_ufr_device = "serial:///dev/ttyUSB0:1000000"	# Nano USB serial
 default_ufr_timeout = 1 #s
 
 # API tests
-test_network_probe_functions  = False
-test_eeprom_writing_functions = False
-test_reset_functions          = True
-test_sleep_functions          = True
-test_led_sound_functions      = True
-test_esp_io                   = True
-test_anti_collision_functions = True
-test_uid_functions            = True
-test_tag_emulation            = True
+test_network_probe_functions      = False
+test_eeprom_writing_functions     = False
+test_reader_info_functions        = True
+test_ad_hoc_functions             = True
+test_rf_analog_settings_functions = True
+test_reset_functions              = True
+test_sleep_functions              = True
+test_led_sound_functions          = True
+test_esp_io                       = True
+test_uid_functions                = True
+test_anti_collision_functions     = True
+test_tag_emulation                = True
 
 
 
@@ -250,36 +253,45 @@ class ufrerr(IntEnum):
   NT4H_INVALID_MAC                        = 0xca
   NT4H_NO_CHANGES                         = 0xcb
 
-class ufrcardtype(IntEnum):
-  MIFARE_ULTRALIGHT                       = 0x01
-  MIFARE_ULTRALIGHT_EV1_11                = 0x02
-  MIFARE_ULTRALIGHT_EV1_21                = 0x03
-  MIFARE_ULTRALIGHT_C                     = 0x04
-  NTAG_203                                = 0x05
-  NTAG_210                                = 0x06
-  NTAG_212                                = 0x07
-  NTAG_213                                = 0x08
-  NTAG_215                                = 0x09
-  NTAG_216                                = 0x0a
+class ufrcardtype(IntEnum):	# Partially documented - may be wrong/incomplete
+
+  GENERIC                                 = 0x00	# Undocumented
+  MIFARE_CLASSIC_1K                       = 0x08
+  MIFARE_CLASSIC_4K                       = 0x18
+  MIFARE_MINI                             = 0x09
+  CONTACTLESS_EMV                         = 0x0b	# Undocumented
+  MIFARE_DESFIRE                          = 0x20	# Undocumented
+
+class ufrdlcardtype(IntEnum):
+  DL_MIFARE_ULTRALIGHT                    = 0x01
+  DL_MIFARE_ULTRALIGHT_EV1_11             = 0x02
+  DL_MIFARE_ULTRALIGHT_EV1_21             = 0x03
+  DL_MIFARE_ULTRALIGHT_C                  = 0x04
+  DL_NTAG_203                             = 0x05
+  DL_NTAG_210                             = 0x06
+  DL_NTAG_212                             = 0x07
+  DL_NTAG_213                             = 0x08
+  DL_NTAG_215                             = 0x09
+  DL_NTAG_216                             = 0x0a
   MIKRON_MIK640D                          = 0x0b
   NFC_T2T_GENERIC                         = 0x0c
-  MIFARE_MINI                             = 0x20
-  MIFARE_CLASSIC_1K                       = 0x21
-  MIFARE_CLASSIC_4K                       = 0x22
-  MIFARE_PLUS_S_2K                        = 0x23
-  MIFARE_PLUS_S_4K                        = 0x24
-  MIFARE_PLUS_X_2K                        = 0x25
-  MIFARE_PLUS_X_4K                        = 0x26
-  MIFARE_DESFIRE                          = 0x27
-  MIFARE_DESFIRE_EV1_2K                   = 0x28
-  MIFARE_DESFIRE_EV1_4K                   = 0x29
-  MIFARE_DESFIRE_EV1_8K                   = 0x2a
-  MIFARE_DESFIRE_EV2_2K                   = 0x2b
-  MIFARE_DESFIRE_EV2_4K                   = 0x2c
-  MIFARE_DESFIRE_EV2_8K                   = 0x2d
-  GENERIC_ISO14443_4                      = 0x40
-  GENERIC_ISO14443_TYPE_B                 = 0x41
-  IMEI_UID                                = 0x80
+  DL_MIFARE_MINI                          = 0x20
+  DL_MIFARE_CLASSIC_1K                    = 0x21
+  DL_MIFARE_CLASSIC_4K                    = 0x22
+  DL_MIFARE_PLUS_S_2K                     = 0x23
+  DL_MIFARE_PLUS_S_4K                     = 0x24
+  DL_MIFARE_PLUS_X_2K                     = 0x25
+  DL_MIFARE_PLUS_X_4K                     = 0x26
+  DL_MIFARE_DESFIRE                       = 0x27
+  DL_MIFARE_DESFIRE_EV1_2K                = 0x28
+  DL_MIFARE_DESFIRE_EV1_4K                = 0x29
+  DL_MIFARE_DESFIRE_EV1_8K                = 0x2a
+  DL_MIFARE_DESFIRE_EV2_2K                = 0x2b
+  DL_MIFARE_DESFIRE_EV2_4K                = 0x2c
+  DL_MIFARE_DESFIRE_EV2_8K                = 0x2d
+  DL_GENERIC_ISO14443_4                   = 0x40
+  DL_GENERIC_ISO14443_TYPE_B              = 0x41
+  DL_IMEI_UID                             = 0x80
 
 class ufrauthmode(IntEnum):
   RKA_AUTH1A                              = 0x00
@@ -342,7 +354,8 @@ ufr_header_vals = tuple(map(int, ufrhead))
 ufr_trailer_vals = tuple(map(int, ufrtrail)) 
 ufr_cmd_vals = tuple(map(int, ufrcmd))
 ufr_err_vals = tuple(map(int, ufrerr))
-ufr_val_to_card_type = {cardtype.value: cardtype for cardtype in ufrcardtype}
+ufr_val_to_card_type = {ct.value: ct for ct in ufrcardtype}
+ufr_val_to_dl_card_type = {dlct.value: dlct for dlct in ufrdlcardtype}
 ufr_val_to_cmd = {cmd.value: cmd for cmd in ufrcmd}
 ufr_val_to_err = {err.value: err for err in ufrerr}
 ufr_val_to_iostate = {iostate.value: iostate for iostate in ufriostate}
@@ -350,18 +363,17 @@ ufr_val_to_iostate = {iostate.value: iostate for iostate in ufriostate}
 # Number of concurrent connection when scanning a subnet for Nano Onlines
 subnet_probe_concurrent_connections = 100
 
-
-
 # Leave sleep mode parameters
-WAKE_UP_BYTE                   = 0x00
+wake_up_byte                   = 0x00
 wake_up_wait                   = .01 #s
-post_wake_up_wait              = .1 #s	Apparently needed by the reader
 
-# Soft reader restart and hard reader reset parameters
-post_reset_wait                = .1 #s	Apparently needed by the reader
-
-# Write emulation NDEF parameters
-post_write_emulation_ndef_wait = .1 #s	Apparently needed after writing EEPROM
+# Extra delays following certain commands that aren't prescribed in the COM
+# protocol, but that are apparently needed to prevent the reader from going
+# unresponsive after the command
+post_wake_up_wait              = .1 #s
+post_reset_wait                = .1 #s
+post_write_emulation_ndef_wait = .1 #s
+post_emulation_start_stop_wait = .01 #s
 
 
 
@@ -491,9 +503,22 @@ class ufr:
     csum = 0
     for b in data:
       csum ^= b
-
     return((csum + 0x07) % 256)
     
+
+
+  def _uid_bytes2str(self, bytesuid):
+    """Convert bytes or a list of integers into a human-readable UID
+    """
+    return(":".join(["{:02X}".format(b) for b in bytesuid]))
+
+
+
+  def _uid_str2bytes(self, struid):
+    """Convert a human-readable UID into bytes
+    """
+    return(bytes([int(v, 16) for v in struid.split(":")]))
+
 
 
   def _send_data(self, data):
@@ -574,7 +599,7 @@ class ufr:
 
 
 
-  def send_cmd(self, cmd, par0 = 0, par1 = 0, ext_len = 0):
+  def _send_cmd(self, cmd, par0 = 0, par1 = 0, ext_len = 0):
     """Send a short command
     """
 
@@ -587,7 +612,7 @@ class ufr:
 
 
 
-  def send_ext(self, ext_parms):
+  def _send_ext(self, ext_parms):
     """Sent extended command parameters
     """
 
@@ -597,7 +622,7 @@ class ufr:
 
 
 
-  def send_cmd_ext(self, cmd, par0, par1, ext_parms, timeout = None):
+  def _send_cmd_ext(self, cmd, par0, par1, ext_parms, timeout = None):
     """Send an extended command in two steps: first the short command, wait for
     an ACK, then send the extended command parameters
     """
@@ -605,22 +630,22 @@ class ufr:
     ext_len = len(ext_parms) + 1
 
     if not ext_len:
-      return(self.send_cmd(cmd, par0, par1, 0))
+      return(self._send_cmd(cmd, par0, par1, 0))
 
-    self.send_cmd(cmd, par0, par1, ext_len)
+    self._send_cmd(cmd, par0, par1, ext_len)
 
-    answer = self.get_answer(timeout)
+    answer = self._get_answer(timeout)
 
     if not answer.is_ack or answer.code != cmd.value:
       raise ValueError("expected ACK to {}, ext_len={}, "
 			"par0={:02x}h, par1={:02x}h - got {}".format(
 			cmd.name, ext_len, par0, par1, answer.printable()))
 
-    self.send_ext(ext_parms)
+    self._send_ext(ext_parms)
 
 
 
-  def get_answer(self, timeout = None):
+  def _get_answer(self, timeout = None):
     """Get an answer packet
     """
 
@@ -728,7 +753,7 @@ class ufr:
 
 
   def get_cmd_ext_part_ack(self, timeout = None):
-    """Get a multipart CMD_EXT acknowledgment.
+    """Get a multipart CMD_EXT acknowledgment
     Return True if it's a part acknowledgment, False if it's the last part.
     If we get anything else, raise an exception.
     """
@@ -762,7 +787,7 @@ class ufr:
     answer is unexpected
     """
 
-    answer = self.get_answer(timeout)
+    answer = self._get_answer(timeout)
     if not answer.is_rsp or answer.code != self.last_cmd:
       raise ValueError("expected response to {} - got {}".format(
 			self.last_cmd.name, answer.printable()))
@@ -800,6 +825,11 @@ class ufr:
     self.close()
 
 
+
+  # Front-end API functions - roughly 1:1 with the Digital Logic COM protocol
+  # with a few additional convenience functions
+  #
+  # Incomplete - functions will be added as needed
 
   def is_host_nano_online(self, host, timeout = None):
     """Try to contact a host to see if it's running a HTTP server serving a
@@ -848,41 +878,64 @@ class ufr:
 
 
 
-  # Front-end API functions - added as needed
   def get_reader_type(self, timeout = None):
+    """Get the reader's type
+    """
 
-    self.send_cmd(ufrcmd.GET_READER_TYPE)
+    self._send_cmd(ufrcmd.GET_READER_TYPE)
     rsp = self.get_last_command_response(timeout)
     return(rsp.ext[0] + (rsp.ext[1] << 8) + \
 		(rsp.ext[2] << 16) + (rsp.ext[3] << 24))
 
-  def get_serial_number(self, timeout = None):
 
-    self.send_cmd(ufrcmd.GET_SERIAL_NUMBER)
+
+  def get_serial_number(self, timeout = None):
+    """Get the reader's serial number
+    """
+
+    self._send_cmd(ufrcmd.GET_SERIAL_NUMBER)
     rsp = self.get_last_command_response(timeout)
     return(bytes(rsp.ext).decode("ascii"))
 
-  def get_hardware_version(self, timeout = None):
 
-    self.send_cmd(ufrcmd.GET_HARDWARE_VERSION)
+
+  def get_hardware_version(self, timeout = None):
+    """Get the reader's hardware version
+    """
+
+    self._send_cmd(ufrcmd.GET_HARDWARE_VERSION)
     rsp = self.get_last_command_response(timeout)
     return((rsp.val0 << 8) + rsp.val1)
+
+
 
   def get_firmware_version(self, timeout = None):
+    """Get the reader's firmware version
+    """
 
-    self.send_cmd(ufrcmd.GET_FIRMWARE_VERSION)
+    self._send_cmd(ufrcmd.GET_FIRMWARE_VERSION)
     rsp = self.get_last_command_response(timeout)
     return((rsp.val0 << 8) + rsp.val1)
 
-  def get_build_number(self, timeout = None):
 
-    self.send_cmd(ufrcmd.GET_BUILD_NUMBER)
+
+  def get_build_number(self, timeout = None):
+    """Get the reader's firmware's build number
+    """
+
+    self._send_cmd(ufrcmd.GET_BUILD_NUMBER)
     rsp = self.get_last_command_response(timeout)
     return(rsp.val0)
 
-  def get_card_id_ex(self, timeout = None):
 
-    self.send_cmd(ufrcmd.GET_CARD_ID_EX)
+
+  def get_card_id(self, timeout = None):
+    """Get the card type and UID (4 bytes only)
+    Return the UID or None if no card is in the field
+    If the card type is unknown, return the integer value
+    """
+
+    self._send_cmd(ufrcmd.GET_CARD_ID)
     try:
       rsp = self.get_last_command_response(timeout)
     except:
@@ -890,62 +943,153 @@ class ufr:
         return(None)
       else:
         raise
-    return(":".join(["{:02X}".format(v) for v in rsp.ext[:rsp.val1]]))
+    return(ufr_val_to_card_type.get(rsp.val0, rsp.val0),
+		self._uid_bytes2str(rsp.ext[:rsp.val1]))
 
-  def get_analog_settings(self, tag_comm_type, timeout = None):
 
-    self.send_cmd(ufrcmd.GET_RF_ANALOG_SETTINGS, tag_comm_type)
+
+  def get_card_id_ex(self, timeout = None):
+    """Get the card type and UID (4, 7 or 10 bytes)
+    Return the UID or None if no card is in the field
+    If the card type is unknown, return the integer value
+    """
+
+    self._send_cmd(ufrcmd.GET_CARD_ID_EX)
+    try:
+      rsp = self.get_last_command_response(timeout)
+    except:
+      if self.answer.code == ufrerr.NO_CARD:
+        return(None)
+      else:
+        raise
+    return(ufr_val_to_card_type.get(rsp.val0, rsp.val0),
+		self._uid_bytes2str(rsp.ext[:rsp.val1]))
+
+
+
+  def get_last_card_id_ex(self, timeout = None):
+    """Get the last read card type and UID (4, 7 or 10 bytes)
+    Return the UID or None if no card was last read
+    If the card type is unknown, return the integer value
+    """
+
+    self._send_cmd(ufrcmd.GET_LAST_CARD_ID_EX)
+    try:
+      rsp = self.get_last_command_response(timeout)
+    except:
+      if self.answer.code == ufrerr.NO_CARD:
+        return(None)
+      else:
+        raise
+    return(ufr_val_to_card_type.get(rsp.val0, rsp.val0),
+		self._uid_bytes2str(rsp.ext[:rsp.val1]))
+
+
+
+  def get_dlogic_card_type(self, timeout = None):
+    """Get the Digital Logic card type or None if no card is in the field
+    """
+
+    self._send_cmd(ufrcmd.GET_DLOGIC_CARD_TYPE)
+    try:
+      rsp = self.get_last_command_response(timeout)
+    except:
+      if self.answer.code == ufrerr.NO_CARD:
+        return(None)
+      else:
+        raise
+    return(ufr_val_to_dl_card_type[rsp.val0])
+
+
+
+  def get_rf_analog_settings(self, tag_comm_type, timeout = None):
+    """Get the RF frontend's analog settings
+    """
+
+    self._send_cmd(ufrcmd.GET_RF_ANALOG_SETTINGS, tag_comm_type)
     rsp = self.get_last_command_response(timeout)
     return(rsp.ext)
 
+
+
   def set_analog_settings(self, tag_comm_type, factory_settings, settings,
 				timeout = None):
-    self.send_cmd_ext(ufrcmd.SET_RF_ANALOG_SETTINGS, tag_comm_type,
+    """Set the RF frontend's analog settings
+    """
+
+    self._send_cmd_ext(ufrcmd.SET_RF_ANALOG_SETTINGS, tag_comm_type,
 			1 if factory_settings else 0, settings, timeout)
     rsp = self.get_last_command_response(timeout)
 
+
+
   def set_led_config(self, blink, timeout = None):
-    self.send_cmd(ufrcmd.SET_LED_CONFIG, 1 if blink else 0)
+    """Set the green LED's configuration
+    """
+
+    self._send_cmd(ufrcmd.SET_LED_CONFIG, 1 if blink else 0)
     rsp = self.get_last_command_response(timeout)
+
+
 
   def enter_sleep_mode(self, timeout = None):
+    """Send the reader to sleep
+    """
 
-    self.send_cmd(ufrcmd.ENTER_SLEEP_MODE)
+    self._send_cmd(ufrcmd.ENTER_SLEEP_MODE)
     rsp = self.get_last_command_response(timeout)
 
-  def leave_sleep_mode(self, timeout = None):
 
-    self._send_data((WAKE_UP_BYTE,))
+
+  def leave_sleep_mode(self, timeout = None):
+    """Wake up the reader
+    """
+
+    self._send_data((wake_up_byte,))
     sleep(wake_up_wait)
-    self.send_cmd(ufrcmd.LEAVE_SLEEP_MODE)
+    self._send_cmd(ufrcmd.LEAVE_SLEEP_MODE)
     rsp = self.get_last_command_response(timeout)
     sleep(post_wake_up_wait)
 
-  def rf_reset(self, timeout = None):
 
-    self.send_cmd(ufrcmd.RF_RESET)
+
+  def rf_reset(self, timeout = None):
+    """Reset the RF field
+    """
+
+    self._send_cmd(ufrcmd.RF_RESET)
     rsp = self.get_last_command_response(timeout)
 
-  def self_reset(self, timeout = None):
 
-    self.send_cmd(ufrcmd.SELF_RESET)
+
+  def self_reset(self, timeout = None):
+    """Soft-restart the reader
+    """
+
+    self._send_cmd(ufrcmd.SELF_RESET)
     rsp = self.get_last_command_response(timeout)
     sleep(post_reset_wait)
 
+
+
   def write_emulation_ndef(self, ndef, in_ram = False, timeout = None):
+    """Write the emulation NDEF in EEPROM or in RAM. The NDEF in EEPROM survives
+    resets but is 144 bytes long at the most. The NDEF in RAM can be 1008 bytes
+    long but is wiped after a reset
+    """
 
     ndeflen = len(ndef)
 
     if (not in_ram and ndeflen > 144) or (in_ram and ndeflen > 1008):
       raise ValueError("NDEF too long")
 
-    # Split the ndef into 240-byte-long parts
+    # Split the NDEF into 240-byte-long parts
     ext_parts = [ndef[i:i + 240] for i in range(0, ndeflen, 240)]
     if not ext_parts:
       ext_parts = [b""]
 
     # First CMD_EXT part is prefixed with the length of the NDEF, and suffixed
-    # with the checksum of that part (but send_cmd_ext() will take care of
+    # with the checksum of that part (but _send_cmd_ext() will take care of
     # appending the checksum)
     ext_parts[0] = bytes([ndeflen & 0xff, ndeflen >> 8]) + ext_parts[0]
 
@@ -954,7 +1098,7 @@ class ufr:
       ext_parts[i] = bytes([len(ext_parts[i])]) + ext_parts[i]
 
     # Send the command and first CMD_EXT part
-    self.send_cmd_ext(ufrcmd.WRITE_EMULATION_NDEF, 1 if in_ram else 0, 0,
+    self._send_cmd_ext(ufrcmd.WRITE_EMULATION_NDEF, 1 if in_ram else 0, 0,
 			ext_parts.pop(0), timeout)
 
     # Wait for ACKs and send subsequent parts if we have more than one part
@@ -980,62 +1124,110 @@ class ufr:
     rsp = self.get_last_command_response(timeout)
     sleep(post_write_emulation_ndef_wait)
 
-  def tag_emulation_start(self, ram_ndef = False, timeout = None):
 
-    self.send_cmd(ufrcmd.TAG_EMULATION_START, 1 if ram_ndef else 0)
+
+  def tag_emulation_start(self, ram_ndef = False, timeout = None):
+    """Start tag emulation. Use either the NDEF in EEPROM or in RAM
+    """
+
+    self._send_cmd(ufrcmd.TAG_EMULATION_START, 1 if ram_ndef else 0)
     rsp = self.get_last_command_response(timeout)
+    sleep(post_emulation_start_stop_wait)
+
+
 
   def tag_emulation_stop(self, timeout = None):
+    """Stop tag emulation
+    """
 
-    self.send_cmd(ufrcmd.TAG_EMULATION_STOP)
+    self._send_cmd(ufrcmd.TAG_EMULATION_STOP)
     rsp = self.get_last_command_response(timeout)
+    sleep(post_emulation_start_stop_wait)
+
+
 
   def ad_hoc_emulation_start(self, timeout = None):
+    """Start ad-hoc (peer-to-peer) emulation
+    """
 
-    self.send_cmd(ufrcmd.AD_HOC_EMULATION_START)
+    self._send_cmd(ufrcmd.AD_HOC_EMULATION_START)
     rsp = self.get_last_command_response(timeout)
+    sleep(post_emulation_start_stop_wait)
+
+
 
   def ad_hoc_emulation_stop(self, timeout = None):
+    """Stop ad-hoc (peer-to-peer) emulation
+    """
 
-    self.send_cmd(ufrcmd.AD_HOC_EMULATION_STOP)
+    self._send_cmd(ufrcmd.AD_HOC_EMULATION_STOP)
     rsp = self.get_last_command_response(timeout)
+    sleep(post_emulation_start_stop_wait)
+
+
 
   def red_light_control(self, state, timeout = None):
+    """Turn the red LED on or off
+    """
 
-    self.send_cmd(ufrcmd.RED_LIGHT_CONTROL, 1 if state else 0)
+    self._send_cmd(ufrcmd.RED_LIGHT_CONTROL, 1 if state else 0)
     rsp = self.get_last_command_response(timeout)
+
+
 
   def user_interface_signal(self, light_signal_mode, beep_signal_mode,
 				timeout = None):
-    self.send_cmd(ufrcmd.USER_INTERFACE_SIGNAL, light_signal_mode.value,
+    """Trigger a LED sequence or beep sequence
+    """
+    self._send_cmd(ufrcmd.USER_INTERFACE_SIGNAL, light_signal_mode.value,
 			beep_signal_mode.value)
     rsp = self.get_last_command_response(timeout)
 
+
+
   def set_speaker_frequency(self, frequency, timeout = None):
+    """Make the buzzer emit a continuous sound. Set frequency to 0 or None to
+    stop the sound
+    """
 
     period = ((round(65535 - 1500000 / (2 * frequency))) & 0xffff) \
 		if frequency else 0xffff
-    self.send_cmd(ufrcmd.SET_SPEAKER_FREQUENCY, period & 0xff, period >> 8)
+    self._send_cmd(ufrcmd.SET_SPEAKER_FREQUENCY, period & 0xff, period >> 8)
     rsp = self.get_last_command_response(timeout)
+
+
 
   def set_iso14443_4_mode(self, timeout = None):
+    """Set ISO14443-4 mode
+    """
 
-    self.send_cmd(ufrcmd.SET_ISO14443_4_MODE)
+    self._send_cmd(ufrcmd.SET_ISO14443_4_MODE)
     rsp = self.get_last_command_response(timeout)
 
-  def enable_anti_collision(self, timeout = None):
 
-    self.send_cmd(ufrcmd.ENABLE_ANTI_COLLISION)
+
+  def enable_anti_collision(self, timeout = None):
+    """Enable anti-collision mode: leave single-card mode and stop polling
+    """
+
+    self._send_cmd(ufrcmd.ENABLE_ANTI_COLLISION)
     rsp = self.get_last_command_response(timeout)
 
   def disable_anti_collision(self, timeout = None):
+    """Disable anti-collision mode; return to single-card mode and start polling
+    """
 
-    self.send_cmd(ufrcmd.DISABLE_ANTI_COLLISION)
+    self._send_cmd(ufrcmd.DISABLE_ANTI_COLLISION)
     rsp = self.get_last_command_response(timeout)
 
-  def enum_cards(self, timeout = None):
 
-    self.send_cmd(ufrcmd.ENUM_CARDS)
+
+  def enum_cards(self, timeout = None):
+    """Enumerate cards in the field in anti-collision mode
+    Return True if at least one card was enumerated, False if no card was found
+    """
+
+    self._send_cmd(ufrcmd.ENUM_CARDS)
     try:
       rsp = self.get_last_command_response(timeout)
     except:
@@ -1045,9 +1237,14 @@ class ufr:
         raise
     return(True)
 
-  def list_cards(self, timeout = None):
 
-    self.send_cmd(ufrcmd.LIST_CARDS)
+
+  def list_cards(self, timeout = None):
+    """List cards previously enumerated by enum_cards()
+    Return a list of UIDs or an empty list if no card was enumerated
+    """
+
+    self._send_cmd(ufrcmd.LIST_CARDS)
     try:
       rsp = self.get_last_command_response(timeout)
     except:
@@ -1055,48 +1252,84 @@ class ufr:
         return([])
       else:
         raise
-    return([":".join(["{:02X}".format(v) \
-		for v in rsp.ext[i + 1:i + rsp.ext[i] + 1]]) \
+    return([self._uid_bytes2str(rsp.ext[i + 1 : i + rsp.ext[i] + 1]) \
 		for i in range(0, len(rsp.ext), 11)])
 
-  def select_card(self, uid, timeout = None):
 
-    uid = [int(v, 16) for v in uid.split(":")]
-    self.send_cmd_ext(ufrcmd.SELECT_CARD, len(uid), 0, uid, timeout)
+
+  def select_card(self, uid, timeout = None):
+    """Select a card in the field in anti-collision mode
+    """
+
+    bytesuid = self._uid_str2bytes(uid)
+    self._send_cmd_ext(ufrcmd.SELECT_CARD, len(bytesuid), 0, bytesuid, timeout)
     rsp = self.get_last_command_response(timeout)
-    return(ufr_val_to_card_type[rsp.val0])
+    return(ufr_val_to_dl_card_type[rsp.val0])
+
+
 
   def deselect_card(self, timeout = None):
+    """Deselect the currently selected card in anti-collision mode
+    """
 
-    self.send_cmd(ufrcmd.DESELECT_CARD)
+    self._send_cmd(ufrcmd.DESELECT_CARD)
     rsp = self.get_last_command_response(timeout)
 
-  def get_anti_collision_status(self, timeout = None):
 
-    self.send_cmd(ufrcmd.GET_ANTI_COLLISION_STATUS)
+
+  def get_anti_collision_status(self, timeout = None):
+    """Return the status of the anti-collision mode, and whether a card is
+    currently selected
+    """
+
+    self._send_cmd(ufrcmd.GET_ANTI_COLLISION_STATUS)
     rsp = self.get_last_command_response(timeout)
     return(rsp.val0 != 0, rsp.val1 != 0)
 
-  def esp_set_io_state(self, pin, state, timeout = None):
 
-    self.send_cmd(ufrcmd.ESP_SET_IO_STATE, pin, state.value)
+
+  def esp_set_io_state(self, pin, state, timeout = None):
+    """Set the state of one of the 6 ESP I/O pins
+    """
+
+    self._send_cmd(ufrcmd.ESP_SET_IO_STATE, pin, state.value)
     rsp = self.get_last_command_response(timeout)
 
-  def esp_get_io_state(self, timeout = None):
 
-    self.send_cmd(ufrcmd.ESP_GET_IO_STATE)
+
+  def esp_get_io_state(self, timeout = None):
+    """Get the states of the 6 ESP I/O pins
+    return the states as a list
+    """
+
+    self._send_cmd(ufrcmd.ESP_GET_IO_STATE)
     rsp = self.get_last_command_response(timeout)
     return([ufr_val_to_iostate[st] for st in rsp.ext])
 
-  def esp_set_display_data(self, rgb1, rgb2, duration, timeout = None):
 
-    self.send_cmd_ext(ufrcmd.ESP_SET_DISPLAY_DATA,
+
+  def esp_set_display_data(self, rgb1, rgb2, duration, timeout = None):
+    """Set the color of the two ESP LEDs for a certain duration in ms. Set the
+    duration to 0 to keep those colors permanently. Set a short duration to
+    return to reader-managed colors
+    WARNING: don't set two non-zero timeouts in a row, or the reader will go
+             unresponsive when the first delay elapses. If you want to
+             play a color sequence, only the last command should have a
+             non-zero timeout, and you should manage the sequence's delays
+             yourself
+    """
+
+    self._send_cmd_ext(ufrcmd.ESP_SET_DISPLAY_DATA,
 			duration & 0xff, duration >> 8, rgb1 + rgb2, timeout)
     rsp = self.get_last_command_response(timeout)
 
-  def esp_reader_reset(self, timeout = None):
 
-    self.send_cmd(ufrcmd.ESP_READER_RESET, 0)
+
+  def esp_reader_reset(self, timeout = None):
+    """Ask the ESP to reset the reader
+    """
+
+    self._send_cmd(ufrcmd.ESP_READER_RESET, 0)
     rsp = self.get_last_command_response(timeout)
     sleep(post_reset_wait)
 
@@ -1104,59 +1337,107 @@ class ufr:
 
 ### Test routine
 if __name__ == "__main__":
-  """Test routine
+  """Test routine: jog as many API functions as possible when this Python file
+  is called as a standalone executable
   """
 
+  import sys
+  import argparse
+
+  # Parse the command line arguments if we have parameters
+  argparser=argparse.ArgumentParser()
+  argparser.add_argument(
+	  "-d", "--device",
+	  help="uFR device to test (default {})".format(default_ufr_device),
+	  type=str,
+	  default=default_ufr_device
+	)
+  args=argparser.parse_args()
+
+  # Pretty line formatting
+  padded = lambda s: "{:<30}".format(s)
+
+  # Create the ufr object
   ufr = ufr()
 
+  # Network probing functions - the device doesn't need to be open for this
   if test_network_probe_functions:
-    print("IS_HOST_NANO_ONLINE:       ", ufr.is_host_nano_online("ufr"))
-    print("PROBE_SUBNET_NANO_ONLINES: ",
-			ufr.probe_subnet_nano_onlines("192.168.1.0/24"))
 
-  ufr.open()
+    sys.stdout.write(padded("PROBE_SUBNET_NANO_ONLINES: "))
+    sys.stdout.flush()
+    nos = ufr.probe_subnet_nano_onlines("192.168.1.0/24")
+    print(nos)
+    for no in nos:
+      print(padded("IS_HOST_NANO_ONLINE:"), ufr.is_host_nano_online(no))
 
-  print("GET_READER_TYPE:           ", hex(ufr.get_reader_type()))
-  print("GET_SERIAL_NUMBER:         ", ufr.get_serial_number())
-  print("GET_HARDWARE_VERSION:      ", hex(ufr.get_hardware_version()))
-  print("GET_FIRMWARE_VERSION:      ", hex(ufr.get_firmware_version()))
-  print("GET_BUILD_NUMBER:          ", hex(ufr.get_build_number()))
+  # Open the device
+  ufr.open(args.device)
 
-  print("AD_HOC_EMULATION_START")
-  ufr.ad_hoc_emulation_start()
-  print("AD_HOC_EMULATION_STOP")
-  ufr.ad_hoc_emulation_stop()
+  # Reader information functions
+  if test_reader_info_functions:
 
-  for tct in map(int, ufrtagcommtype):
-    print("GET_RF_ANALOG_SETTINGS: ", ufr.get_analog_settings(tct))
+    print(padded("GET_READER_TYPE:"), hex(ufr.get_reader_type()))
+    print(padded("GET_SERIAL_NUMBER:"), ufr.get_serial_number())
+    print(padded("GET_HARDWARE_VERSION:"), hex(ufr.get_hardware_version()))
+    print(padded("GET_FIRMWARE_VERSION:"), hex(ufr.get_firmware_version()))
+    print(padded("GET_BUILD_NUMBER:"), hex(ufr.get_build_number()))
 
-    if test_eeprom_writing_functions:
-      new_settings = list(ufr.answer.ext)
-      new_settings[pn53xanalogsettingsreg.RXTHRESHOLD] = 255
-      print("SET_RF_ANALOG_SETTINGS")
-      ufr.set_analog_settings(tct, False, new_settings)
-      print("SET_LED_CONFIG")
-      ufr.set_led_config(True)
+  # Ad-hoc (peer-to-peer) functions
+  if test_ad_hoc_functions:
 
+    print("AD_HOC_EMULATION_START")
+    ufr.ad_hoc_emulation_start()
+    print("AD_HOC_EMULATION_STOP")
+    ufr.ad_hoc_emulation_stop()
+
+  # RF analog settings functions
+  if test_rf_analog_settings_functions:
+
+    for tct in map(int, ufrtagcommtype):
+      print(padded("GET_RF_ANALOG_SETTINGS:"), ufr.get_rf_analog_settings(tct))
+
+      if test_eeprom_writing_functions:
+
+        new_settings = list(ufr.answer.ext)
+        new_settings[pn53xanalogsettingsreg.RXTHRESHOLD] = 255
+        print("SET_RF_ANALOG_SETTINGS")
+        ufr.set_analog_settings(tct, False, new_settings)
+        print("SET_LED_CONFIG")
+        ufr.set_led_config(True)
+
+  # Reset functions
   if test_reset_functions:
+
     print("SELF_RESET")
     ufr.self_reset()
+
+    # Only test the ESP reset function if the device is a Nano Online connected
+    # through the network, but not in HTTP transparent mode, as transparent
+    # mode bypasses the the ESP and sends the commands directly to the UART
     if ufr.udpsock is not None or ufr.tcpsock:
+
       print("ESP_READER_RESET")
       ufr.esp_reader_reset()
 
-  if test_sleep_functions:
-    if ufr.tcpsock is None and ufr.resturl is None:
-      print("ENTER_SLEEP_MODE")
-      ufr.enter_sleep_mode()
-      print("LEAVE_SLEEP_MODE")
-      ufr.leave_sleep_mode()
+  # Sleep functions - only works if the device is connected directly to a
+  # a serial port or through the network in HTTP transparent mode, as we'll
+  # lose communication with it and won't be able to wake it back up in TCP
+  # or UDP mode
+  if test_sleep_functions and ufr.tcpsock is None and ufr.resturl is None:
 
+    print("ENTER_SLEEP_MODE")
+    ufr.enter_sleep_mode()
+    print("LEAVE_SLEEP_MODE")
+    ufr.leave_sleep_mode()
+
+  # LED and buzzer functions
   if test_led_sound_functions:
+
     print("RED_LIGHT_CONTROL")
     ufr.red_light_control(True)
     sleep(2)
     ufr.red_light_control(False)
+
     print("SET_SPEAKER_FREQUENCY")
     freq = 1480 / 4
     for i in range(3):
@@ -1164,9 +1445,15 @@ if __name__ == "__main__":
       freq *= 2
       sleep(.1)
     ufr.set_speaker_frequency(0)
+
     print("USER_INTERFACE_SIGNAL")
     ufr.user_interface_signal(ufrlightsignal.ALTERNATION, ufrbeepsignal.SHORT)
+
+    # Only test the ESP LED function if the device is a Nano Online connected
+    # through the network, but not in HTTP transparent mode, as transparent
+    # mode bypasses the the ESP and sends the commands directly to the UART
     if ufr.udpsock is not None or ufr.tcpsock is not None:
+
       print("ESP_SET_DISPLAY_DATA")
       for i in range(3):
         ufr.esp_set_display_data((0xff, 0, 0), (0, 0xff, 0), 0)
@@ -1177,50 +1464,67 @@ if __name__ == "__main__":
         sleep(0.1)
       ufr.esp_set_display_data((0, 0, 0), (0, 0, 0), 1000)
 
+  # ESP I/O functions - only works if the device is a Nano Online connected
+  # through the network, but not in HTTP transparent mode, as transparent
+  # mode bypasses the the ESP and sends the commands directly to the UART
   if test_esp_io and (ufr.udpsock is not None or ufr.tcpsock):
+
     print("ESP_SET_IO_STATE")
     ufr.esp_set_io_state(6, ufriostate.HIGH)
-    print("ESP_GET_IO_STATE", ufr.esp_get_io_state())
+    print(padded("ESP_GET_IO_STATE"), ufr.esp_get_io_state())
     print("ESP_SET_IO_STATE")
     ufr.esp_set_io_state(6, ufriostate.LOW)
-    print("ESP_GET_IO_STATE", ufr.esp_get_io_state())
+    print(padded("ESP_GET_IO_STATE"), ufr.esp_get_io_state())
 
+  # Get UID functions
+  if test_uid_functions:
+
+      print(padded("GET_CARD_ID:"), ufr.get_card_id_ex())
+      print(padded("GET_CARD_ID_EX:"), ufr.get_card_id_ex())
+      print(padded("GET_LAST_CARD_ID_EX:"), ufr.get_last_card_id_ex())
+      print(padded("GET_DLOGIC_CARD_TYPE:"), ufr.get_dlogic_card_type())
+
+  # Anti-collision functions
   if test_anti_collision_functions:
+
     print("ENABLE_ANTI_COLLISION")
     ufr.enable_anti_collision()
-    print("GET_ANTI_COLLISION_STATUS:   ", ufr.get_anti_collision_status())
-    print("ENUM_CARDS:                  ", ufr.enum_cards())
+    print(padded("GET_ANTI_COLLISION_STATUS:"), ufr.get_anti_collision_status())
+    print(padded("ENUM_CARDS:"), ufr.enum_cards())
     uids = ufr.list_cards()
-    print("LIST_CARDS:                  ", uids)
+    print(padded("LIST_CARDS:"), uids)
     if uids:
-      print("SELECT CARD:                 ", ufr.select_card(uids[0]))
-      print("GET_ANTI_COLLISION_STATUS:   ", ufr.get_anti_collision_status())
+      print(padded("SELECT CARD:"), ufr.select_card(uids[0]))
+      print(padded("GET_ANTI_COLLISION_STATUS:"),
+		ufr.get_anti_collision_status())
       print("DESELECT CARD")
       ufr.deselect_card()
-      print("GET_ANTI_COLLISION_STATUS:   ", ufr.get_anti_collision_status())
+      print(padded("GET_ANTI_COLLISION_STATUS:"),
+		ufr.get_anti_collision_status())
     print("DISABLE_ANTI_COLLISION")
     ufr.disable_anti_collision()
-    print("GET_ANTI_COLLISION_STATUS:   ", ufr.get_anti_collision_status())
+    print(padded("GET_ANTI_COLLISION_STATUS:"), ufr.get_anti_collision_status())
 
-  if test_uid_functions:
-    for i in range(10):
-      print("GET_CARD_ID_EX:         ", ufr.get_card_id_ex())
-      sleep(.5)
-
+  # Tag emulation functions
   if test_tag_emulation:
+
     eeprom_ndef = b"\x03\x10\xd1\x01\x0cU\x01d-logic.net\xfe"
     ram_ndef = b"\x03\xff\x03\xeb\xc1\x01\x00\x00\x03\xe4T\x02en3456" + \
 		b"7890123456" * 99
+
     if test_eeprom_writing_functions:
       print("WRITE_EMULATION_NDEF (EEPROM)")
       ufr.write_emulation_ndef(eeprom_ndef, False)
+
     print("WRITE_EMULATION_NDEF (RAM)")
     ufr.write_emulation_ndef(ram_ndef, True)
-  print("TAG_EMULATION_START (RAM NDEF)")
-  ufr.tag_emulation_start(True)
-  sleep(10)
-  print("TAG_EMULATION_STOP")
-  ufr.tag_emulation_stop()
+    print("TAG_EMULATION_START (RAM NDEF)")
+    ufr.tag_emulation_start(True)
+    print("TAG_EMULATION_STOP")
+    ufr.tag_emulation_stop()
 
+  # Close the device
   ufr.close()
+
+  # Delete the ufr object
   del(ufr)
