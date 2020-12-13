@@ -757,7 +757,7 @@ class ufr:
 
 
 
-  def get_cmd_ext_part_ack(self, timeout = None):
+  def _get_cmd_ext_part_ack(self, timeout = None):
     """Get a multipart CMD_EXT acknowledgment
     Return True if it's a part acknowledgment, False if it's the last part.
     If we get anything else, raise an exception.
@@ -787,7 +787,7 @@ class ufr:
 
 
 
-  def get_last_command_response(self, timeout = None):
+  def _get_last_command_response(self, timeout = None):
     """Get a responde to the last command sent. Throw an exception if the
     answer is unexpected
     """
@@ -888,7 +888,7 @@ class ufr:
     """
 
     self._send_cmd(ufrcmd.GET_READER_TYPE)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
     return(rsp.ext[0] + (rsp.ext[1] << 8) + \
 		(rsp.ext[2] << 16) + (rsp.ext[3] << 24))
 
@@ -899,7 +899,7 @@ class ufr:
     """
 
     self._send_cmd(ufrcmd.GET_SERIAL_NUMBER)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
     return(bytes(rsp.ext).decode("ascii"))
 
 
@@ -909,7 +909,7 @@ class ufr:
     """
 
     self._send_cmd(ufrcmd.GET_HARDWARE_VERSION)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
     return((rsp.val0 << 8) + rsp.val1)
 
 
@@ -919,7 +919,7 @@ class ufr:
     """
 
     self._send_cmd(ufrcmd.GET_FIRMWARE_VERSION)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
     return((rsp.val0 << 8) + rsp.val1)
 
 
@@ -929,7 +929,7 @@ class ufr:
     """
 
     self._send_cmd(ufrcmd.GET_BUILD_NUMBER)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
     return(rsp.val0)
 
 
@@ -942,7 +942,7 @@ class ufr:
 
     self._send_cmd(ufrcmd.GET_CARD_ID)
     try:
-      rsp = self.get_last_command_response(timeout)
+      rsp = self._get_last_command_response(timeout)
     except:
       if self.answer.code == ufrerr.NO_CARD:
         return(None)
@@ -961,7 +961,7 @@ class ufr:
 
     self._send_cmd(ufrcmd.GET_CARD_ID_EX)
     try:
-      rsp = self.get_last_command_response(timeout)
+      rsp = self._get_last_command_response(timeout)
     except:
       if self.answer.code == ufrerr.NO_CARD:
         return(None)
@@ -980,7 +980,7 @@ class ufr:
 
     self._send_cmd(ufrcmd.GET_LAST_CARD_ID_EX)
     try:
-      rsp = self.get_last_command_response(timeout)
+      rsp = self._get_last_command_response(timeout)
     except:
       if self.answer.code == ufrerr.NO_CARD:
         return(None)
@@ -997,7 +997,7 @@ class ufr:
 
     self._send_cmd(ufrcmd.GET_DLOGIC_CARD_TYPE)
     try:
-      rsp = self.get_last_command_response(timeout)
+      rsp = self._get_last_command_response(timeout)
     except:
       if self.answer.code == ufrerr.NO_CARD:
         return(None)
@@ -1010,6 +1010,7 @@ class ufr:
   def linear_read(self, authmode, addr, length, key = 0, multiblock = False,
 			timeout = None):
     """Linear read from a card. Return None if no card was present in the field
+    STATUS: partially tested
     """
 
     # Define the command parameters
@@ -1059,7 +1060,7 @@ class ufr:
     # Send the command and read back the data
     self._send_cmd_ext(ufrcmd.LINEAR_READ, par1, 0, cmdext, timeout)
     try:
-      rsp = self.get_last_command_response(timeout)
+      rsp = self._get_last_command_response(timeout)
     except:
       if self.answer.code == ufrerr.NO_CARD:
         return(None)
@@ -1075,19 +1076,19 @@ class ufr:
     """
 
     self._send_cmd(ufrcmd.GET_RF_ANALOG_SETTINGS, tag_comm_type)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
     return(rsp.ext)
 
 
 
-  def set_analog_settings(self, tag_comm_type, factory_settings, settings,
+  def set_rf_analog_settings(self, tag_comm_type, factory_settings, settings,
 				timeout = None):
     """Set the RF frontend's analog settings
     """
 
     self._send_cmd_ext(ufrcmd.SET_RF_ANALOG_SETTINGS, tag_comm_type,
 			1 if factory_settings else 0, settings, timeout)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
 
 
 
@@ -1096,7 +1097,7 @@ class ufr:
     """
 
     self._send_cmd(ufrcmd.SET_LED_CONFIG, 1 if blink else 0)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
 
 
 
@@ -1105,7 +1106,7 @@ class ufr:
     """
 
     self._send_cmd(ufrcmd.ENTER_SLEEP_MODE)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
 
 
 
@@ -1116,7 +1117,7 @@ class ufr:
     self._send_data((wake_up_byte,))
     sleep(wake_up_wait)
     self._send_cmd(ufrcmd.LEAVE_SLEEP_MODE)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
     sleep(post_wake_up_wait)
 
 
@@ -1126,7 +1127,7 @@ class ufr:
     """
 
     self._send_cmd(ufrcmd.RF_RESET)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
 
 
 
@@ -1135,7 +1136,7 @@ class ufr:
     """
 
     self._send_cmd(ufrcmd.SELF_RESET)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
     sleep(post_reset_wait)
 
 
@@ -1171,7 +1172,7 @@ class ufr:
 
     # Wait for ACKs and send subsequent parts if we have more than one part
     if ext_parts:
-      while self.get_cmd_ext_part_ack(timeout):
+      while self._get_cmd_ext_part_ack(timeout):
         if not ext_parts:
           raise ValueError("expected {} ({:02x}h) - got {} ({:02x}h) "
 			"with no more CMD_EXT parts to send".format(
@@ -1189,7 +1190,7 @@ class ufr:
 			ufrcmdextpartack.ACK_LAST_PART.name,
 			ufrcmdextpartack.ACK_LAST_PART.value))
 
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
     sleep(post_write_emulation_ndef_wait)
 
 
@@ -1199,7 +1200,7 @@ class ufr:
     """
 
     self._send_cmd(ufrcmd.TAG_EMULATION_START, 1 if ram_ndef else 0)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
     sleep(post_emulation_start_stop_wait)
 
 
@@ -1209,7 +1210,7 @@ class ufr:
     """
 
     self._send_cmd(ufrcmd.TAG_EMULATION_STOP)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
     sleep(post_emulation_start_stop_wait)
 
 
@@ -1219,7 +1220,7 @@ class ufr:
     """
 
     self._send_cmd(ufrcmd.AD_HOC_EMULATION_START)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
     sleep(post_emulation_start_stop_wait)
 
 
@@ -1229,7 +1230,7 @@ class ufr:
     """
 
     self._send_cmd(ufrcmd.AD_HOC_EMULATION_STOP)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
     sleep(post_emulation_start_stop_wait)
 
 
@@ -1239,7 +1240,7 @@ class ufr:
     """
 
     self._send_cmd(ufrcmd.RED_LIGHT_CONTROL, 1 if state else 0)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
 
 
 
@@ -1249,7 +1250,7 @@ class ufr:
     """
     self._send_cmd(ufrcmd.USER_INTERFACE_SIGNAL, light_signal_mode.value,
 			beep_signal_mode.value)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
 
 
 
@@ -1261,7 +1262,7 @@ class ufr:
     period = ((round(65535 - 1500000 / (2 * frequency))) & 0xffff) \
 		if frequency else 0xffff
     self._send_cmd(ufrcmd.SET_SPEAKER_FREQUENCY, period & 0xff, period >> 8)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
 
 
 
@@ -1270,28 +1271,30 @@ class ufr:
     """
 
     self._send_cmd(ufrcmd.SET_ISO14443_4_MODE)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
 
 
 
   def s_block_deselect(self, timeout = None):
     """Deselect tag and restore polling
+    STATUS: untested
     """
 
     self._send_cmd(ufrcmd.S_BLOCK_DESELECT)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
 
 
 
   def apdu_transceive(self, c_apdu, apdu_timeout = None, timeout = None):
     """Send a command APDU to the ISO14443-4 transponder and get the response
     APDU
+    STATUS: untested
     """
 
     self._send_cmd_ext(ufrcmd.APDU_TRANSCEIVE, 0, self.default_timeout \
 			if apdu_timeout is None else apdu_timeout,
 			c_apdu, timeout)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
     return(rsp.ext)
 
 
@@ -1301,14 +1304,14 @@ class ufr:
     """
 
     self._send_cmd(ufrcmd.ENABLE_ANTI_COLLISION)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
 
   def disable_anti_collision(self, timeout = None):
     """Disable anti-collision mode; return to single-card mode and start polling
     """
 
     self._send_cmd(ufrcmd.DISABLE_ANTI_COLLISION)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
 
 
 
@@ -1319,7 +1322,7 @@ class ufr:
 
     self._send_cmd(ufrcmd.ENUM_CARDS)
     try:
-      rsp = self.get_last_command_response(timeout)
+      rsp = self._get_last_command_response(timeout)
     except:
       if self.answer.code == ufrerr.NO_CARDS_ENUMERATED:
         return(False)
@@ -1336,7 +1339,7 @@ class ufr:
 
     self._send_cmd(ufrcmd.LIST_CARDS)
     try:
-      rsp = self.get_last_command_response(timeout)
+      rsp = self._get_last_command_response(timeout)
     except:
       if self.answer.code == ufrerr.NO_CARDS_ENUMERATED:
         return([])
@@ -1353,7 +1356,7 @@ class ufr:
 
     bytesuid = self._uid_str2bytes(uid)
     self._send_cmd_ext(ufrcmd.SELECT_CARD, len(bytesuid), 0, bytesuid, timeout)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
     return(ufr_val_to_dl_card_type[rsp.val0])
 
 
@@ -1363,7 +1366,7 @@ class ufr:
     """
 
     self._send_cmd(ufrcmd.DESELECT_CARD)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
 
 
 
@@ -1373,7 +1376,7 @@ class ufr:
     """
 
     self._send_cmd(ufrcmd.GET_ANTI_COLLISION_STATUS)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
     return(rsp.val0 != 0, rsp.val1 != 0)
 
 
@@ -1383,7 +1386,7 @@ class ufr:
     """
 
     self._send_cmd(ufrcmd.ESP_SET_IO_STATE, pin, state.value)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
 
 
 
@@ -1393,7 +1396,7 @@ class ufr:
     """
 
     self._send_cmd(ufrcmd.ESP_GET_IO_STATE)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
     return([ufr_val_to_iostate[st] for st in rsp.ext])
 
 
@@ -1411,7 +1414,7 @@ class ufr:
 
     self._send_cmd_ext(ufrcmd.ESP_SET_DISPLAY_DATA,
 			duration & 0xff, duration >> 8, rgb1 + rgb2, timeout)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
 
 
 
@@ -1420,35 +1423,75 @@ class ufr:
     """
 
     self._send_cmd(ufrcmd.ESP_READER_RESET, 0)
-    rsp = self.get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout)
     sleep(post_reset_wait)
 
 
 
-### Test routine
-if __name__ == "__main__":
-  """Test routine: jog as many API functions as possible when this Python file
-  is called as a standalone executable
+### Routines
+def print_api_soc(ufr):
+  """Print the API's state of completion - i.e. which Digital Logic COM
+  protocol functions are implemented in this class, which aren't, which are
+  untested or partially tested, and what percentage of the COM protocol is
+  implemented
   """
 
-  import sys
-  import argparse
+  comcmds = [cmd.name for cmd in ufrcmd]
+  pubclassfcts = [attribute for attribute in dir(ufr) \
+			if callable(getattr(ufr, attribute)) and \
+			not attribute.startswith('_')]
 
-  # Parse the command line arguments if we have parameters
-  argparser=argparse.ArgumentParser()
-  argparser.add_argument(
-	  "-d", "--device",
-	  help="uFR device to test (default {})".format(default_ufr_device),
-	  type=str,
-	  default=default_ufr_device
-	)
-  args=argparser.parse_args()
+  # Get the status of all the commands in the COM protocol from whether the
+  # corresponding functions exists in lowercase in the class and from status
+  # markers in their docstrings
+  cmd_impl_status = {}
+  nb_impl = 0
+  max_cmd_name_len = 0
+  max_status_len = 0
+  for cmd in comcmds:
+    if cmd.lower() in pubclassfcts:
+      localparms = {'ufr': ufr}
+      exec("doc = ufr.{}.__doc__".format(cmd.lower()), {}, localparms)
+      m = re.findall("(STATUS|COMPLETION)\s*:\s*(.*)\n", localparms["doc"])
+      cmd_impl_status[cmd] = "Implemented" + (" - {}".format(m[0][1]) \
+					if m else "")
+      nb_impl += 1
+    else:
+      cmd_impl_status[cmd] = "Not implemented"
+    max_cmd_name_len = max(max_cmd_name_len, len(cmd))
+    max_status_len = max(max_status_len, len(cmd_impl_status[cmd]))
+
+  # Dump the implementation status of all the commands and the percentage of
+  # implemented commands
+  max_cmd_name_len += 2
+  padded = lambda s: ("{" + ":<{}".format(max_cmd_name_len) + "}").format(s)
+  separator = "-" * (max_cmd_name_len + max_status_len)
+
+  print(padded("UFR COM protocol command"), "Status")
+  print(separator)
+  for cmd in comcmds:
+    print(padded(cmd), cmd_impl_status[cmd])
+
+  print(separator)
+  print(padded("State of completion:"),
+		"{}%".format(round(100 * nb_impl / len(ufrcmd))))
+
+  # Dump the list of API functions that are specific to this class
+  print()
+  print("Class-specific API functions")
+  print(separator)
+  for fct in sorted(pubclassfcts, key = lambda fct: len(fct)):
+    if fct.upper() not in comcmds:
+      print("{}()".format(fct))
+
+
+
+def test_api(ufr):
+  """Test the API
+  """
 
   # Pretty line formatting
   padded = lambda s: "{:<30}".format(s)
-
-  # Create the ufr object
-  ufr = ufr()
 
   # Network probing functions - the device doesn't need to be open for this
   if test_network_probe_functions:
@@ -1491,7 +1534,7 @@ if __name__ == "__main__":
         new_settings = list(ufr.answer.ext)
         new_settings[pn53xanalogsettingsreg.RXTHRESHOLD] = 255
         print("SET_RF_ANALOG_SETTINGS")
-        ufr.set_analog_settings(tct, False, new_settings)
+        ufr.set_rf_analog_settings(tct, False, new_settings)
         print("SET_LED_CONFIG")
         ufr.set_led_config(True)
 
@@ -1627,6 +1670,41 @@ if __name__ == "__main__":
     ufr.tag_emulation_start(True)
     print("TAG_EMULATION_STOP")
     ufr.tag_emulation_stop()
+
+
+
+### Main routine - run if the class is called as a standalone program
+if __name__ == "__main__":
+
+  ### Modules
+  import sys
+  import argparse
+
+  # Parse the command line arguments
+  argparser=argparse.ArgumentParser()
+  argparser.add_argument(
+	  "-d", "--device",
+	  help = "uFR device to test (default {})".format(default_ufr_device),
+	  type = str,
+	  default = default_ufr_device
+	)
+  argparser.add_argument(
+	  "-soc", "--state-of-completion",
+	  help = "Print the API's state of completion",
+	  action = "store_true"
+	)
+  args=argparser.parse_args()
+
+  # Create the ufr object
+  ufr = ufr()
+
+  # Dump the API's state of completion
+  if args.state_of_completion:
+    print_api_soc(ufr)
+
+  # Test the API
+  else:
+    test_api(ufr)
 
   # Close the device
   ufr.close()

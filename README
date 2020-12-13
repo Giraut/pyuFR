@@ -30,21 +30,156 @@ However, it has several drawbacks:
 
 Fortunately, Digital Logic is very open with their serial protocol and has
 documented it fully and comprehensively. This class reimplements it in pure
-Python.
+Python, and adds a few addiitional functions.
+
+The uFR COM protocol is specified here: 
+
+ohttps://github.com/nfc-rfid-reader-sdk/ufr-doc/raw/master/uFR_COM_Protocol.pdf
 
 
 
                      /!\ WARNING: work in progress /!\
 
-State of completion:
+Current state of completion:
 
-  - Core protocol fully implemented (sending commands, receiving answers over
-    serial and network)
+UFR COM protocol command      Status
+-----------------------------------------------------------
+GET_READER_TYPE               Implemented
+GET_READER_SERIAL             Not implemented
+GET_SERIAL_NUMBER             Implemented
+GET_HARDWARE_VERSION          Implemented
+GET_FIRMWARE_VERSION          Implemented
+GET_BUILD_NUMBER              Implemented
+READER_KEY_WRITE              Not implemented
+USER_DATA_READ                Not implemented
+USER_DATA_WRITE               Not implemented
+READER_KEYS_LOCK              Not implemented
+READER_KEYS_UNLOCK            Not implemented
+READER_PASSWORD_WRITE         Not implemented
+SELF_RESET                    Implemented
+SET_SPEED_PERMANENTLY         Not implemented
+GET_SPEED_PARAMETERS          Not implemented
+SET_UART_SPEED                Not implemented
+RED_LIGHT_CONTROL             Implemented
+USER_INTERFACE_SIGNAL         Implemented
+SET_RF_ANALOG_SETTINGS        Implemented
+GET_RF_ANALOG_SETTINGS        Implemented
+SET_LED_CONFIG                Implemented
+DEFAULT_UART_SPEED_SESSION    Not implemented
+GET_CARD_ID                   Implemented
+GET_CARD_ID_EX                Implemented
+GET_DLOGIC_CARD_TYPE          Implemented
+GET_LAST_CARD_ID_EX           Implemented
+SECTOR_TRAILER_WRITE          Not implemented
+SECTOR_TRAILER_WRITE_UNSAFE   Not implemented
+BLOCK_READ                    Not implemented
+BLOCK_WRITE                   Not implemented
+BLOCK_IN_SECTOR_READ          Not implemented
+BLOCK_IN_SECTOR_WRITE         Not implemented
+LINEAR_READ                   Implemented - partially tested
+LINEAR_WRITE                  Not implemented
+LINEAR_FORMAT_CARD            Not implemented
+LIN_ROW_READ                  Not implemented
+VALUE_BLOCK_READ              Not implemented
+VALUE_BLOCK_WRITE             Not implemented
+VALUE_BLOCK_INC               Not implemented
+VALUE_BLOCK_DEC               Not implemented
+VALUE_BLOCK_IN_SECTOR_READ    Not implemented
+VALUE_BLOCK_IN_SECTOR_WRITE   Not implemented
+VALUE_BLOCK_IN_SECTOR_INC     Not implemented
+VALUE_BLOCK_IN_SECTOR_DEC     Not implemented
+GET_DESFIRE_UID               Not implemented
+SET_DESFIRE_KEY               Not implemented
+DESFIRE_WRITE_TO_FILE         Not implemented
+DESFIRE_READ_FROM_FILE        Not implemented
+DESFIRE_CREATE_APPLICATION    Not implemented
+DESFIRE_CREATE_FILE           Not implemented
+DESFIRE_CREATE_AES_KEY        Not implemented
+DESFIRE_GET_KEY_CONFIG        Not implemented
+DESFIRE_CHANGE_KEY_CONFIG     Not implemented
+DESFIRE_DELETE_APPLICATION    Not implemented
+DESFIRE_DELETE_FILE           Not implemented
+DESFIRE_SET_CONFIGURATION     Not implemented
+DESFIRE_FORMAT_CARD           Not implemented
+DESFIRE_FREE_MEM              Not implemented
+DESFIRE_WRITE_AES_KEY         Not implemented
+DESFIRE_CREATE_VALUE_FILE     Not implemented
+DESFIRE_READ_VALUE_FILE       Not implemented
+DESFIRE_INCREASE_VALUE_FILE   Not implemented
+DESFIRE_DECREASE_VALUE_FILE   Not implemented
+DESFIRE_CREATE_RECORD_FILE    Not implemented
+DESFIRE_WRITE_RECORD          Not implemented
+DESFIRE_READ_RECORDS          Not implemented
+DESFIRE_CLEAR_RECORD          Not implemented
+DESFIRE_GET_APPLICATION_IDS   Not implemented
+MFP_FIRST_AUTHENTICATE        Not implemented
+MFP_CHANGE_REG_KEY            Not implemented
+MFP_GET_UID                   Not implemented
+GET_NFC_T2T_VERSION           Not implemented
+READ_COUNTER                  Not implemented
+INCREMENT_COUNTER             Not implemented
+NT4H_COMMON_CMD               Not implemented
+READ_ECC_SIGNATURE            Not implemented
+SET_CARD_ID_SEND_CONF         Not implemented
+GET_CARD_ID_SEND_CONF         Not implemented
+SET_BAD_SELECT_NR_MAX         Not implemented
+GET_BAD_SELECT_NR_MAX         Not implemented
+ENTER_SLEEP_MODE              Implemented
+LEAVE_SLEEP_MODE              Implemented
+AUTO_SLEEP_SET                Not implemented
+AUTO_SLEEP_GET                Not implemented
+WRITE_EMULATION_NDEF          Implemented
+TAG_EMULATION_START           Implemented
+TAG_EMULATION_STOP            Implemented
+AD_HOC_EMULATION_START        Implemented
+AD_HOC_EMULATION_STOP         Implemented
+GET_EXTERNAL_FIELD            Not implemented
+GET_AD_HOC_EMULATION_PARAMS   Not implemented
+SET_AD_HOC_EMULATION_PARAMS   Not implemented
+SET_DISPLAY_DATA              Not implemented
+SET_SPEAKER_FREQUENCY         Implemented
+SET_DISPLAY_INTENSITY         Not implemented
+GET_DISPLAY_INTENSITY         Not implemented
+UFR_XRC_LOCK_OPEN             Not implemented
+UFR_XRC_SET_RELAY_STATE       Not implemented
+UFR_XRC_GET_IO_STATE          Not implemented
+ENTER_SHARE_RAM_COMM_MODE     Not implemented
+EXIT_SHARE_RAM_COMM_MODE      Not implemented
+READ_SHARE_RAM                Not implemented
+WRITE_SHARE_RAM               Not implemented
+I_BLOCK_TRANSCEIVE            Not implemented
+R_BLOCK_TRANSCEIVE            Not implemented
+S_BLOCK_DESELECT              Implemented - untested
+SET_ISO14443_4_MODE           Implemented
+APDU_TRANSCEIVE               Implemented - untested
+ENABLE_ANTI_COLLISION         Implemented
+DISABLE_ANTI_COLLISION        Implemented
+ENUM_CARDS                    Implemented
+LIST_CARDS                    Implemented
+SELECT_CARD                   Implemented
+DESELECT_CARD                 Implemented
+GET_ANTI_COLLISION_STATUS     Implemented
+ESP_SET_IO_STATE              Implemented
+ESP_GET_IO_STATE              Implemented
+ESP_READER_TIME_WRITE         Not implemented
+ESP_READER_TIME_READ          Not implemented
+ESP_READER_EEPROM_READ        Not implemented
+ESP_SET_DISPLAY_DATA          Implemented
+ESP_READER_RESET              Implemented
+ESP_READER_PASSWORD_WRITE     Not implemented
+ESP_READER_EEPROM_WRITE       Not implemented
+CHECK_UID_CHANGE              Not implemented
+RF_RESET                      Implemented
+GET_READER_STATUS             Not implemented
+-----------------------------------------------------------
+State of completion:          31%
 
-  - Front-end API calls (i.e. convenience functions to communicate with a
-    reader "smartly") partially implemented. Currently basic device probing
-    functions, a few configuration functions, sleep / reset functions and
-    UID probing
+Class-specific API functions
+-----------------------------------------------------------
+open()
+close()
+is_host_nano_online()
+probe_subnet_nano_onlines()
 
 
 
