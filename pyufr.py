@@ -29,12 +29,12 @@ test_tag_emulation                = False
 
 ### Modules
 import re
+import socket
 import requests
 from time import sleep
 from enum import IntEnum
 from datetime import datetime
 from multiprocessing.pool import ThreadPool
-from socket import socket, gethostbyname, AF_INET, SOCK_DGRAM, SOCK_STREAM
 
 # Try to import optional modules but fail silently if they're not needed later
 try:
@@ -504,15 +504,15 @@ class ufr:
       self.serdev = Serial(devhost, baudport, timeout = timeout)
 
     elif proto == "udp":
-      self.udpsock = socket(AF_INET, SOCK_DGRAM)
+      self.udpsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
       self.udpsock.settimeout(timeout)
-      self.udphost = gethostbyname(devhost)
+      self.udphost = socket.gethostbyname(devhost)
       self.udpport = int(baudport)
 
     elif proto == "tcp":
-      self.tcpsock = socket(AF_INET, SOCK_STREAM)
+      self.tcpsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
       self.tcpsock.settimeout(timeout)
-      self.tcpsock.connect((gethostbyname(devhost), int(baudport)))
+      self.tcpsock.connect((socket.gethostbyname(devhost), int(baudport)))
 
     elif proto == "http":
       self.resturl = url
@@ -524,6 +524,21 @@ class ufr:
     self.default_timeout = timeout
     self.current_timeout = timeout
     return
+
+
+
+  def flush(self, timeout = None):
+    """ Wait until the reception times out, to clear any buffered data
+    """
+
+    while self.serdev is not None or self.udpsock is not None or \
+		self.tcpsock is not None:
+      try:
+        self._get_data(timeout)
+      except TimeoutError:
+        return
+      except socket.timeout:
+        return
 
 
 

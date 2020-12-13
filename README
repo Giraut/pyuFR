@@ -178,6 +178,7 @@ Class-specific API functions
 -----------------------------------------------------------
 open()
 close()
+flush()
 is_host_nano_online()
 probe_subnet_nano_onlines()
 
