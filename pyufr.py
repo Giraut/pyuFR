@@ -12,18 +12,18 @@ default_ufr_timeout = 1 #s
 # API tests
 test_network_probe_functions      = False
 test_eeprom_writing_functions     = False
-test_reader_info_functions        = True
-test_ad_hoc_functions             = True
-test_rf_analog_settings_functions = True
-test_reset_functions              = True
-test_sleep_functions              = True
-test_led_sound_functions          = True
-test_esp_io                       = True
+test_reader_info_functions        = False
+test_ad_hoc_functions             = False
+test_rf_analog_settings_functions = False
+test_reset_functions              = False
+test_sleep_functions              = False
+test_led_sound_functions          = False
+test_esp_io                       = False
 test_uid_functions                = True
-test_read_functions               = True
-test_iso14443_4_functions         = True
-test_anti_collision_functions     = True
-test_tag_emulation                = True
+test_read_functions               = False
+test_iso14443_4_functions         = False
+test_anti_collision_functions     = False
+test_tag_emulation                = False
 
 
 
@@ -155,7 +155,7 @@ class ufrcmd(IntEnum):
   TAG_EMULATION_STOP                      = 0x49
   AD_HOC_EMULATION_START                  = 0x76
   AD_HOC_EMULATION_STOP                   = 0x77
-  GET_EXTERNAL_FIELD                      = 0x9f
+  GET_EXTERNAL_FIELD_STATE                = 0x9f
   GET_AD_HOC_EMULATION_PARAMS             = 0x9d
   SET_AD_HOC_EMULATION_PARAMS             = 0x9e
   SET_DISPLAY_DATA                        = 0x72
@@ -352,6 +352,29 @@ class ufriostate(IntEnum):
   HIGH                                    = 1
   INPUT                                   = 2
 
+class ufremumode(IntEnum):
+  TAG_EMU_DISABLED                        = 0,
+  TAG_EMU_DEDICATED                       = 1,
+  TAG_EMU_COMBINED                        = 2,
+  TAG_EMU_AUTO_AD_HOC                     = 3
+
+class ufremustate(IntEnum):
+  EMULATION_NONE                          = 0,
+  EMULATION_IDLE                          = 1,
+  EMULATION_AUTO_COLL                     = 2,
+  EMULATION_ACTIVE                        = 3,
+  EMULATION_HALT                          = 4,
+  EMULATION_POWER_OFF                     = 5
+
+class ufrpcdmgrstate(IntEnum):
+  PCD_MGR_NO_RF_GENERATED                 = 0,
+  PCD_MGR_14443A_POLLING                  = 1,
+  PCD_MGR_14443A_SELECTED                 = 2,
+  PCD_MGR_CE_DEDICATED                    = 3,
+  PCD_MGR_CE_COMBO_START                  = 4,
+  PCD_MGR_CE_COMBO                        = 5,
+  PCD_MGR_CE_COMBO_IN_FIELD               = 6
+
 
 
 ### Defines
@@ -361,6 +384,9 @@ ufr_cmd_vals = tuple(map(int, ufrcmd))
 ufr_err_vals = tuple(map(int, ufrerr))
 ufr_val_to_card_type = {ct.value: ct for ct in ufrcardtype}
 ufr_val_to_dl_card_type = {dlct.value: dlct for dlct in ufrdlcardtype}
+ufr_val_to_emu_mode = {em.value: em for em in ufremumode}
+ufr_val_to_emu_state = {st.value: st for st in ufremustate}
+ufr_val_to_pcd_mgr_state = {pmst.value: pmst for pmst in ufrpcdmgrstate}
 ufr_val_to_cmd = {cmd.value: cmd for cmd in ufrcmd}
 ufr_val_to_err = {err.value: err for err in ufrerr}
 ufr_val_to_iostate = {iostate.value: iostate for iostate in ufriostate}
@@ -894,8 +920,18 @@ class ufr:
 
 
 
+  def get_reader_serial(self, timeout = None):
+    """Get the reader's serial number as an integer
+    """
+    self._send_cmd(ufrcmd.GET_READER_SERIAL)
+    rsp = self._get_last_command_response(timeout)
+    return(rsp.ext[0] + (rsp.ext[1] << 8) + \
+		(rsp.ext[2] << 16) + (rsp.ext[3] << 24))
+
+
+
   def get_serial_number(self, timeout = None):
-    """Get the reader's serial number
+    """Get the reader's serial number as a string
     """
 
     self._send_cmd(ufrcmd.GET_SERIAL_NUMBER)
@@ -1131,6 +1167,37 @@ class ufr:
 
 
 
+  def check_uid_change(self, timeout = None):
+    """Return True if the card's UID is changeable (magic Mifare Classic gen2),
+    False if it isn't of if no card is in the field
+    NOTE: Does NOT test if the card responds to the magic Mifare command
+          (magic Mifare Classic gen 1a), only if the UID is directly writeable
+    """
+
+    self._send_cmd(ufrcmd.CHECK_UID_CHANGE)
+    try:
+      rsp = self._get_last_command_response(timeout)
+    except:
+      if self.answer.code == ufrerr.READING_ERROR:
+        return(False)
+      else:
+        raise
+    return(True)
+
+
+
+  def get_reader_status(self, timeout = None):
+    """Get the states of the reader
+    """
+
+    self._send_cmd(ufrcmd.GET_READER_STATUS)
+    rsp = self._get_last_command_response(timeout)
+    return(ufr_val_to_pcd_mgr_state[rsp.ext[0]],
+		ufr_val_to_emu_mode[rsp.ext[1]],
+		ufr_val_to_emu_state[rsp.ext[2]])
+
+
+
   def self_reset(self, timeout = None):
     """Soft-restart the reader
     """
@@ -1232,6 +1299,37 @@ class ufr:
     self._send_cmd(ufrcmd.AD_HOC_EMULATION_STOP)
     rsp = self._get_last_command_response(timeout)
     sleep(post_emulation_start_stop_wait)
+
+
+
+  def get_external_field_state(self, timeout = None):
+    """Test the presence of an external RF field in ad-hoc (peer-to-peer) mode
+    """
+
+    self._send_cmd(ufrcmd.GET_EXTERNAL_FIELD_STATE)
+    rsp = self._get_last_command_response(timeout)
+    return(rsp.val0 == 1)
+
+
+
+  def get_ad_hoc_emulation_params(self, timeout = None):
+    """Get current ad-hoc (peer-to-peer) emulation parameters
+    Return RxThreshold and RFCfg
+    """
+
+    self._send_cmd(ufrcmd.GET_AD_HOC_EMULATION_PARAMS)
+    rsp = self._get_last_command_response(timeout)
+    return(rsp.val0, rsp.val1)
+
+
+
+  def set_ad_hoc_emulation_params(self, rxthreshold, rfcfg, timeout = None):
+    """Set current ad-hoc (peer-to-peer) emulation parameters
+    """
+
+    self._send_cmd(ufrcmd.SET_AD_HOC_EMULATION_PARAMS, rxthreshold,
+							rfcfg & 0x7f)
+    rsp = self._get_last_command_response(timeout)
 
 
 
@@ -1510,16 +1608,24 @@ def test_api(ufr):
   if test_reader_info_functions:
 
     print(padded("GET_READER_TYPE:"), hex(ufr.get_reader_type()))
+    print(padded("GET_READER_SERIAL:"), ufr.get_reader_serial())
     print(padded("GET_SERIAL_NUMBER:"), ufr.get_serial_number())
     print(padded("GET_HARDWARE_VERSION:"), hex(ufr.get_hardware_version()))
     print(padded("GET_FIRMWARE_VERSION:"), hex(ufr.get_firmware_version()))
     print(padded("GET_BUILD_NUMBER:"), hex(ufr.get_build_number()))
+    print(padded("GET_READER_STATUS:"), ufr.get_reader_status())
 
   # Ad-hoc (peer-to-peer) functions
   if test_ad_hoc_functions:
 
     print("AD_HOC_EMULATION_START")
     ufr.ad_hoc_emulation_start()
+    rxthreshold, rfcfg = ufr.get_ad_hoc_emulation_params()
+    print(padded("GET_AD_HOC_EMULATION_PARAMS:"), hex(rxthreshold), hex(rfcfg))
+    print("SET_AD_HOC_EMULATION_PARAMS:")
+    ufr.set_ad_hoc_emulation_params(rxthreshold, rfcfg)
+    print(padded("GET_READER_STATUS:"), ufr.get_reader_status())
+    print(padded("GET_EXTERNAL_FIELD_STATE"), ufr.get_external_field_state())
     print("AD_HOC_EMULATION_STOP")
     ufr.ad_hoc_emulation_stop()
 
@@ -1541,6 +1647,8 @@ def test_api(ufr):
   # Reset functions
   if test_reset_functions:
 
+    print("RF_RESET")
+    ufr.rf_reset()
     print("SELF_RESET")
     ufr.self_reset()
 
@@ -1609,13 +1717,14 @@ def test_api(ufr):
     ufr.esp_set_io_state(6, ufriostate.LOW)
     print(padded("ESP_GET_IO_STATE"), ufr.esp_get_io_state())
 
-  # Get UID functions
+  # UID functions
   if test_uid_functions:
 
       print(padded("GET_CARD_ID:"), ufr.get_card_id_ex())
       print(padded("GET_CARD_ID_EX:"), ufr.get_card_id_ex())
       print(padded("GET_LAST_CARD_ID_EX:"), ufr.get_last_card_id_ex())
       print(padded("GET_DLOGIC_CARD_TYPE:"), ufr.get_dlogic_card_type())
+      print(padded("CHECK_UID_CHANGE:"), ufr.check_uid_change())
 
   # Test read functions
   if test_read_functions:
@@ -1668,6 +1777,7 @@ def test_api(ufr):
     ufr.write_emulation_ndef(ram_ndef, True)
     print("TAG_EMULATION_START (RAM NDEF)")
     ufr.tag_emulation_start(True)
+    print(padded("GET_READER_STATUS:"), ufr.get_reader_status())
     print("TAG_EMULATION_STOP")
     ufr.tag_emulation_stop()
 

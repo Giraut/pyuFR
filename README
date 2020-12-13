@@ -45,7 +45,7 @@ Current state of completion:
 UFR COM protocol command      Status
 -----------------------------------------------------------
 GET_READER_TYPE               Implemented
-GET_READER_SERIAL             Not implemented
+GET_READER_SERIAL             Implemented
 GET_SERIAL_NUMBER             Implemented
 GET_HARDWARE_VERSION          Implemented
 GET_FIRMWARE_VERSION          Implemented
@@ -133,9 +133,9 @@ TAG_EMULATION_START           Implemented
 TAG_EMULATION_STOP            Implemented
 AD_HOC_EMULATION_START        Implemented
 AD_HOC_EMULATION_STOP         Implemented
-GET_EXTERNAL_FIELD            Not implemented
-GET_AD_HOC_EMULATION_PARAMS   Not implemented
-SET_AD_HOC_EMULATION_PARAMS   Not implemented
+GET_EXTERNAL_FIELD_STATE      Implemented
+GET_AD_HOC_EMULATION_PARAMS   Implemented
+SET_AD_HOC_EMULATION_PARAMS   Implemented
 SET_DISPLAY_DATA              Not implemented
 SET_SPEAKER_FREQUENCY         Implemented
 SET_DISPLAY_INTENSITY         Not implemented
@@ -168,11 +168,11 @@ ESP_SET_DISPLAY_DATA          Implemented
 ESP_READER_RESET              Implemented
 ESP_READER_PASSWORD_WRITE     Not implemented
 ESP_READER_EEPROM_WRITE       Not implemented
-CHECK_UID_CHANGE              Not implemented
+CHECK_UID_CHANGE              Implemented
 RF_RESET                      Implemented
-GET_READER_STATUS             Not implemented
+GET_READER_STATUS             Implemented
 -----------------------------------------------------------
-State of completion:          31%
+State of completion:          35%
 
 Class-specific API functions
 -----------------------------------------------------------
