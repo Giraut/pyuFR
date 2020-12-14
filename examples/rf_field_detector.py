@@ -62,7 +62,6 @@ if __name__ == "__main__":
       # Output state changes and timings
       if rf_state != rf_state_prev:
 
-        # Create the string to output
         s = "RF field {}".format("ON " if rf_state else "OFF")
 
         now = datetime.now().timestamp()
