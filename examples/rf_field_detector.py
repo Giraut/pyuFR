@@ -59,7 +59,7 @@ if __name__ == "__main__":
       if rf_state_prev is None:
         rf_state_prev = rf_state
 
-      # Output state changes and timings, and drive the buzzer
+      # Output state changes and timings
       if rf_state != rf_state_prev:
 
         # Create the string to output
@@ -74,7 +74,6 @@ if __name__ == "__main__":
             s += " after {:0.0f} ms".format(duration * 1000)
         last_state_change_tstamp = now
 
-        # Output the string
         print(s)
         sys.stdout.flush()
 
