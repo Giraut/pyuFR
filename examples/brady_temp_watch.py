@@ -11,7 +11,7 @@ import ndef
 import argparse
 
 sys.path.append("..")
-import pyufr
+from pyufr import uFR, uFRauthmode
 
 
 
@@ -29,7 +29,7 @@ if __name__ == "__main__":
   args = argparser.parse_args()
 
   # Initialize the reader
-  ufr = pyufr.ufr()
+  ufr = uFR()
   ufr.open(args.device)
 
   try:
@@ -48,7 +48,7 @@ if __name__ == "__main__":
         ufr.enum_cards()
         uid = ufr.list_cards()[0]
         ufr.select_card(uid)
-        n = ufr.linear_read(pyufr.ufrauthmode.T2T_NO_PWD_AUTH, 10, 150)
+        n = ufr.linear_read(uFRauthmode.T2T_NO_PWD_AUTH, 10, 150)
         uri = list(ndef.message_decoder(n))[0].iri
         ufr.deselect_card()
       except KeyboardInterrupt:

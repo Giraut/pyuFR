@@ -12,7 +12,7 @@ import argparse
 from datetime import datetime
 
 sys.path.append("..")
-import pyufr
+from pyufr import uFR, uFRemumode
 
 
 
@@ -30,12 +30,12 @@ if __name__ == "__main__":
   args = argparser.parse_args()
 
   # Initialize the reader
-  ufr = pyufr.ufr()
+  ufr = uFR()
   ufr.open(args.device)
 
   # If we find the reader already in ad-hoc mode, disable it, otherwise it
   # won't accept the reset and anti-collision commands
-  if ufr.get_reader_status()[1] != pyufr.ufremumode.TAG_EMU_DISABLED:
+  if ufr.get_reader_status()[1] != uFRemumode.TAG_EMU_DISABLED:
     ufr.ad_hoc_emulation_stop()
 
   ufr.self_reset()
@@ -85,7 +85,7 @@ if __name__ == "__main__":
 
     ufr.flush()
 
-    if ufr.get_reader_status()[1] != pyufr.ufremumode.TAG_EMU_DISABLED:
+    if ufr.get_reader_status()[1] != uFRemumode.TAG_EMU_DISABLED:
       ufr.ad_hoc_emulation_stop()
 
     if ufr.get_anti_collision_status():
