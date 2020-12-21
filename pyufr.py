@@ -486,7 +486,7 @@ class uFRanswer:
       desc += ", ext=("
       desc += ", ".join(["{:02x}h".format(v) for v in self.ext])
       desc += ")"
-    return(desc)
+    return desc
 
 
 
@@ -594,21 +594,21 @@ class uFR:
     b: int
     for b in data:
       csum ^= b
-    return((csum + 0x07) % 256)
+    return (csum + 0x07) % 256
 
 
 
   def _uid_bytes2str(self: uFR, bytesuid: Union[List[int], bytes]) -> str:
     """Convert bytes or a list of integers into a human-readable UID
     """
-    return(":".join(["{:02X}".format(b) for b in bytesuid]))
+    return ":".join(["{:02X}".format(b) for b in bytesuid])
 
 
 
   def _uid_str2bytes(self: uFR, struid: str) -> bytes:
     """Convert a human-readable UID into bytes
     """
-    return(bytes([int(v, 16) for v in struid.split(":")]))
+    return bytes([int(v, 16) for v in struid.split(":")])
 
 
 
@@ -688,7 +688,7 @@ class uFR:
       data = bytes([int(resp[i:i+2], 16) for i in range(0, len(resp), 2)])
       self.postdata = ""
 
-    return(data)
+    return data
 
 
 
@@ -827,7 +827,7 @@ class uFR:
 
           # If the response is short, return it immediately
           if not self.answer.has_ext or self.answer.is_ack:
-            return(self.answer)
+            return self.answer
 
         else:
           self.answer.wipe()
@@ -857,7 +857,7 @@ class uFR:
         self.answer._got_ext_checksum = True
 
         # Return the long answer
-        return(self.answer)
+        return self.answer
 
       else:
         self.answer.wipe()
@@ -880,9 +880,9 @@ class uFR:
 
     # Did we get an ACK?
     if b == uFRcmdextpartack.ACK_PART:
-      return(True)
+      return True
     if b == uFRcmdextpartack.ACK_LAST_PART:
-      return(False)
+      return False
 
     # We got an expected byte
     raise ValueError("expected {} ({:02x}h) or {} ({:02x}h) - got {:02x}h".
@@ -904,7 +904,7 @@ class uFR:
     if not answer.is_rsp or answer.code != self.last_cmd:
       raise ValueError("expected response to {} - got {}".format(
 			self.last_cmd.name, answer.printable()))
-    return(answer)
+    return answer
 
 
 
@@ -961,10 +961,10 @@ class uFR:
     try:
       response = requests.get("http://" + host, timeout = \
 			self.default_timeout if timeout is None else timeout)
-      return(response.status_code == 200 and \
-		re.search("uFR login", response.text) is not None)
+      return response.status_code == 200 and \
+		re.search("uFR login", response.text) is not None
     except:
-      return(False)
+      return False
 
 
 
@@ -972,7 +972,7 @@ class uFR:
 		ht: Tuple[str, Optional[float]]) -> Tuple[str, bool]:
     """Wrapper to call is_host_nano_online() from a thread pool
     """
-    return(ht[0], self.is_host_nano_online(ht[0], timeout = ht[1]))
+    return (ht[0], self.is_host_nano_online(ht[0], timeout = ht[1]))
 
 
 
@@ -994,7 +994,7 @@ class uFR:
 
     t.close()
 
-    return(nano_online_ips)
+    return nano_online_ips
 
 
 
@@ -1004,9 +1004,9 @@ class uFR:
 
     self._send_cmd(uFRcmd.GET_READER_TYPE)
     rsp: uFRanswer = self._get_last_command_response(timeout)
-    return(rsp.ext[0] + (rsp.ext[1] << 8) + \
+    return rsp.ext[0] + (rsp.ext[1] << 8) + \
 		(rsp.ext[2] << 16) + (rsp.ext[3] << 24) \
-		if isinstance(rsp.ext, list) else -1)
+		if isinstance(rsp.ext, list) else -1
 
 
 
@@ -1016,8 +1016,8 @@ class uFR:
 
     self._send_cmd(uFRcmd.GET_READER_SERIAL)
     rsp: uFRanswer = self._get_last_command_response(timeout)
-    return(rsp.ext[0] + (rsp.ext[1] << 8) + \
-		(rsp.ext[2] << 16) + (rsp.ext[3] << 24))
+    return rsp.ext[0] + (rsp.ext[1] << 8) + \
+		(rsp.ext[2] << 16) + (rsp.ext[3] << 24)
 
 
 
@@ -1027,7 +1027,7 @@ class uFR:
 
     self._send_cmd(uFRcmd.GET_SERIAL_NUMBER)
     rsp: uFRanswer = self._get_last_command_response(timeout)
-    return(bytes(rsp.ext).decode("ascii"))
+    return bytes(rsp.ext).decode("ascii")
 
 
 
@@ -1037,7 +1037,7 @@ class uFR:
 
     self._send_cmd(uFRcmd.GET_HARDWARE_VERSION)
     rsp: uFRanswer = self._get_last_command_response(timeout)
-    return((rsp.val0 << 8) + rsp.val1)
+    return (rsp.val0 << 8) + rsp.val1
 
 
 
@@ -1047,7 +1047,7 @@ class uFR:
 
     self._send_cmd(uFRcmd.GET_FIRMWARE_VERSION)
     rsp: uFRanswer = self._get_last_command_response(timeout)
-    return((rsp.val0 << 8) + rsp.val1)
+    return (rsp.val0 << 8) + rsp.val1
 
 
 
@@ -1056,7 +1056,7 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.GET_BUILD_NUMBER)
-    return(self._get_last_command_response(timeout).val0)
+    return self._get_last_command_response(timeout).val0
 
 
 
@@ -1070,10 +1070,10 @@ class uFR:
       rsp: uFRanswer = self._get_last_command_response(timeout)
     except:
       if self.answer.code == uFRerr.NO_CARD:
-        return((uFRcardtype._NO_CARD, 0))
+        return (uFRcardtype._NO_CARD, 0)
       else:
         raise
-    return(_ufr_val_to_card_type.get(rsp.val0, uFRcardtype._UNDEFINED),
+    return (_ufr_val_to_card_type.get(rsp.val0, uFRcardtype._UNDEFINED),
 		(rsp.ext[0] << 24) + (rsp.ext[1] << 16) + \
 		(rsp.ext[2] << 8) + rsp.ext[3])
 
@@ -1089,10 +1089,10 @@ class uFR:
       rsp: uFRanswer = self._get_last_command_response(timeout)
     except:
       if self.answer.code == uFRerr.NO_CARD:
-        return((uFRcardtype._NO_CARD, ""))
+        return (uFRcardtype._NO_CARD, "")
       else:
         raise
-    return(_ufr_val_to_card_type.get(rsp.val0, uFRcardtype._UNDEFINED),
+    return (_ufr_val_to_card_type.get(rsp.val0, uFRcardtype._UNDEFINED),
 		self._uid_bytes2str(rsp.ext[:rsp.val1]))
 
 
@@ -1108,10 +1108,10 @@ class uFR:
       rsp = self._get_last_command_response(timeout)
     except:
       if self.answer.code == uFRerr.NO_CARD:
-        return((uFRcardtype._NO_CARD, ""))
+        return (uFRcardtype._NO_CARD, "")
       else:
         raise
-    return(_ufr_val_to_card_type.get(rsp.val0, uFRcardtype._UNDEFINED),
+    return (_ufr_val_to_card_type.get(rsp.val0, uFRcardtype._UNDEFINED),
 		self._uid_bytes2str(rsp.ext[:rsp.val1]))
 
 
@@ -1126,10 +1126,10 @@ class uFR:
       rsp = self._get_last_command_response(timeout)
     except:
       if self.answer.code == uFRerr.NO_CARD:
-        return(uFRdlcardtype._NO_CARD)
+        return uFRdlcardtype._NO_CARD
       else:
         raise
-    return(_ufr_val_to_dl_card_type.get(rsp.val0, uFRdlcardtype._UNDEFINED))
+    return _ufr_val_to_dl_card_type.get(rsp.val0, uFRdlcardtype._UNDEFINED)
 
 
 
@@ -1209,11 +1209,11 @@ class uFR:
       rsp = self._get_last_command_response(timeout)
     except:
       if self.answer.code == uFRerr.NO_CARD:
-        return(b"")
+        return b""
       else:
         raise
 
-    return(bytes(rsp.ext))
+    return bytes(rsp.ext)
 
 
 
@@ -1224,7 +1224,7 @@ class uFR:
 
     self._send_cmd(uFRcmd.GET_RF_ANALOG_SETTINGS, tag_comm_type.value)
     rsp = self._get_last_command_response(timeout)
-    return(rsp.ext)
+    return rsp.ext
 
 
 
@@ -1292,10 +1292,10 @@ class uFR:
       self._get_last_command_response(timeout)
     except:
       if self.answer.code == uFRerr.READING_ERROR:
-        return(False)
+        return False
       else:
         raise
-    return(True)
+    return True
 
 
 
@@ -1306,7 +1306,7 @@ class uFR:
 
     self._send_cmd(uFRcmd.GET_READER_STATUS)
     rsp: uFRanswer = self._get_last_command_response(timeout)
-    return(_ufr_val_to_pcd_mgr_state[rsp.ext[0]],
+    return (_ufr_val_to_pcd_mgr_state[rsp.ext[0]],
 		_ufr_val_to_emu_mode[rsp.ext[1]],
 		_ufr_val_to_emu_state[rsp.ext[2]])
 
@@ -1426,7 +1426,7 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.GET_EXTERNAL_FIELD_STATE)
-    return(self._get_last_command_response(timeout).val0 == 1)
+    return self._get_last_command_response(timeout).val0 == 1
 
 
 
@@ -1438,7 +1438,7 @@ class uFR:
 
     self._send_cmd(uFRcmd.GET_AD_HOC_EMULATION_PARAMS)
     rsp: uFRanswer = self._get_last_command_response(timeout)
-    return(rsp.val0, rsp.val1)
+    return (rsp.val0, rsp.val1)
 
 
 
@@ -1519,7 +1519,7 @@ class uFR:
 			round(self.default_timeout * 1000) \
 			if apdu_timeout_ms is None else apdu_timeout_ms,
 			c_apdu, timeout)
-    return(bytes(self._get_last_command_response(timeout).ext))
+    return bytes(self._get_last_command_response(timeout).ext)
 
 
 
@@ -1553,10 +1553,10 @@ class uFR:
       self._get_last_command_response(timeout)
     except:
       if self.answer.code == uFRerr.NO_CARDS_ENUMERATED:
-        return(False)
+        return False
       else:
         raise
-    return(True)
+    return True
 
 
 
@@ -1570,11 +1570,11 @@ class uFR:
       rsp: uFRanswer = self._get_last_command_response(timeout)
     except:
       if self.answer.code == uFRerr.NO_CARDS_ENUMERATED:
-        return([])
+        return []
       else:
         raise
-    return([self._uid_bytes2str(rsp.ext[i + 1 : i + rsp.ext[i] + 1]) \
-		for i in range(0, len(rsp.ext), 11)])
+    return [self._uid_bytes2str(rsp.ext[i + 1 : i + rsp.ext[i] + 1]) \
+		for i in range(0, len(rsp.ext), 11)]
 
 
 
@@ -1585,8 +1585,8 @@ class uFR:
 
     bytesuid: bytes = self._uid_str2bytes(uid)
     self._send_cmd_ext(uFRcmd.SELECT_CARD, len(bytesuid), 0, bytesuid, timeout)
-    return(_ufr_val_to_dl_card_type[
-		self._get_last_command_response(timeout).val0])
+    return _ufr_val_to_dl_card_type[
+		self._get_last_command_response(timeout).val0]
 
 
 
@@ -1607,7 +1607,7 @@ class uFR:
 
     self._send_cmd(uFRcmd.GET_ANTI_COLLISION_STATUS)
     rsp = self._get_last_command_response(timeout)
-    return(rsp.val0 != 0, rsp.val1 != 0)
+    return (rsp.val0 != 0, rsp.val1 != 0)
 
 
 
@@ -1628,8 +1628,8 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.ESP_GET_IO_STATE)
-    return([_ufr_val_to_iostate[st]
-		for st in self._get_last_command_response(timeout).ext])
+    return [_ufr_val_to_iostate[st]
+		for st in self._get_last_command_response(timeout).ext]
 
 
 
