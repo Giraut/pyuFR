@@ -427,7 +427,7 @@ _post_emulation_start_stop_wait: float    = .01 #s
 ### Classes
 class uFRanswer:
 
-  def __init__(self: uFRanswer):
+  def __init__(self: uFRanswer) -> None:
 
     self.wipe()
 
