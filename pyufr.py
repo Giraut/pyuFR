@@ -1939,7 +1939,7 @@ def __test_api(ufr: uFR) \
 
     # Only test the ESP reset function if the device is a Nano Online connected
     # through the network, but not in HTTP transparent mode, as transparent
-    # mode bypasses the the ESP and sends the commands directly to the UART
+    # mode bypasses the ESP and sends the commands directly to the UART
     if ufr.udpsock is not None or ufr.tcpsock is not None:
 
       print("ESP_READER_RESET")
@@ -1980,7 +1980,7 @@ def __test_api(ufr: uFR) \
 
     # Only test the ESP LED function if the device is a Nano Online connected
     # through the network, but not in HTTP transparent mode, as transparent
-    # mode bypasses the the ESP and sends the commands directly to the UART
+    # mode bypasses the ESP and sends the commands directly to the UART
     if ufr.udpsock is not None or ufr.tcpsock is not None:
 
       print("ESP_SET_DISPLAY_DATA")
@@ -1995,7 +1995,7 @@ def __test_api(ufr: uFR) \
 
   # ESP I/O functions - only works if the device is a Nano Online connected
   # through the network, but not in HTTP transparent mode, as transparent
-  # mode bypasses the the ESP and sends the commands directly to the UART
+  # mode bypasses the ESP and sends the commands directly to the UART
   if __test_esp_io and (ufr.udpsock is not None or ufr.tcpsock is not None):
 
     print("ESP_SET_IO_STATE")
