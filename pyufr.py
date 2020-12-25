@@ -17,7 +17,7 @@ _default_ufr_timeout = 1 #s
 _post_wake_up_wait: float                 = .1 #s
 _post_reset_wait: float                   = .1 #s
 _post_write_emulation_ndef_wait: float    = .1 #s
-_post_emulation_start_stop_wait: float    = .01 #s
+_post_emulation_start_stop_wait: float    = .1 #s
 
 # Number of concurrent connection when scanning a subnet for Nano Onlines
 _subnet_probe_concurrent_connections: int = 100
@@ -41,7 +41,8 @@ __test_tag_emulation                = True
 
 
 ### Modules
-from typing import Any, List, Tuple, Dict, Callable, Union, Optional
+from typing import Any, Type, List, Tuple, Dict, Callable, Union, Optional
+from types import TracebackType
 import re
 import socket
 import requests
@@ -52,11 +53,11 @@ from multiprocessing.pool import ThreadPool
 
 # Try to import optional modules but fail silently if they're not needed later
 try:
-  from serial import Serial					# type: ignore
+  import serial							# type: ignore
 except:
   pass
 try:
-  from ipaddress import ip_network, IPv4Network
+  import ipaddress
 except:
   pass
 
@@ -69,7 +70,7 @@ class uFRhead(IntEnum):
   RESPONSE_HEADER: int                         = 0xde
   ERR_HEADER: int                              = 0xec
 
-class uFRcmdextpartack(IntEnum):
+class uFRcmdExtPartAck(IntEnum):
   ACK_PART: int                                = 0xad
   ACK_LAST_PART: int                           = 0xdd
 
@@ -270,8 +271,7 @@ class uFRerr(IntEnum):
   NT4H_INVALID_MAC: int                        = 0xca
   NT4H_NO_CHANGES: int                         = 0xcb
 
-class uFRcardtype(IntEnum):	# Partially documented - may be wrong/incomplete
-
+class uFRcardType(IntEnum):	# Partially documented - may be wrong/incomplete
   _NO_CARD: int                                = -2
   _UNDEFINED: int                              = -1
   GENERIC: int                                 = 0x00	# Undocumented
@@ -281,7 +281,7 @@ class uFRcardtype(IntEnum):	# Partially documented - may be wrong/incomplete
   CONTACTLESS_EMV: int                         = 0x0b	# Undocumented
   MIFARE_DESFIRE: int                          = 0x20	# Undocumented
 
-class uFRdlcardtype(IntEnum):
+class uFRDLCardType(IntEnum):
   _NO_CARD: int                                = -2
   _UNDEFINED: int                              = -1
   DL_MIFARE_ULTRALIGHT: int                    = 0x01
@@ -314,7 +314,7 @@ class uFRdlcardtype(IntEnum):
   DL_GENERIC_ISO14443_TYPE_B: int              = 0x41
   DL_IMEI_UID: int                             = 0x80
 
-class uFRauthmode(IntEnum):
+class uFRauthMode(IntEnum):
   T2T_NO_PWD_AUTH: int                         = 0x00
   T2T_RKA_PWD_AUTH: int                        = 0x01
   T2T_PK_PWD_AUTH: int                         = 0x61
@@ -337,13 +337,13 @@ class uFRauthmode(IntEnum):
   MFP_AKM2_AUTH1A: int                         = 0x42
   MFP_AKM2_AUTH1B: int                         = 0x43
 
-class uFRtagcommtype(IntEnum):
+class uFRtagCommType(IntEnum):
   ISO14443_TYPE_A: int                         = 0X01
   ISO14443_TYPE_B: int                         = 0X02
   ISO14443_4_212_KBPS: int                     = 0X03
   ISO14443_4_424_KBPS: int                     = 0X04
 
-class PN53xanalogsettingsreg(IntEnum):
+class PN53xAnalogSettingsReg(IntEnum):
   RFCFG: int                                   = 0
   RXTHRESHOLD: int                             = 1
   GSNON: int                                   = 2
@@ -351,14 +351,14 @@ class PN53xanalogsettingsreg(IntEnum):
   GSNOFF: int                                  = 4
   MODGSP: int                                  = 4
 
-class uFRlightsignal(IntEnum):
+class uFRlightSignal(IntEnum):
   NONE: int                                    = 0
   LONG_GREEN: int                              = 1
   LONG_RED: int                                = 2
   ALTERNATION: int                             = 3
   FLASH: int                                   = 4
 
-class uFRbeepsignal(IntEnum):
+class uFRbeepSignal(IntEnum):
   NONE: int                                    = 0
   SHORT: int                                   = 1
   LONG: int                                    = 2
@@ -366,18 +366,18 @@ class uFRbeepsignal(IntEnum):
   TRIPLE_SHORT: int                            = 4
   TRIPLET_MELODY: int                          = 5
 
-class uFRiostate(IntEnum):
+class uFRIOState(IntEnum):
   LOW: int                                     = 0
   HIGH: int                                    = 1
   INPUT: int                                   = 2
 
-class uFRemumode(IntEnum):
+class uFRemuMode(IntEnum):
   TAG_EMU_DISABLED: int                        = 0
   TAG_EMU_DEDICATED: int                       = 1
   TAG_EMU_COMBINED: int                        = 2
   TAG_EMU_AUTO_AD_HOC: int                     = 3
 
-class uFRemustate(IntEnum):
+class uFRemuState(IntEnum):
   EMULATION_NONE: int                          = 0
   EMULATION_IDLE: int                          = 1
   EMULATION_AUTO_COLL: int                     = 2
@@ -385,7 +385,7 @@ class uFRemustate(IntEnum):
   EMULATION_HALT: int                          = 4
   EMULATION_POWER_OFF: int                     = 5
 
-class uFRpcdmgrstate(IntEnum):
+class uFRPCDMgrState(IntEnum):
   PCD_MGR_NO_RF_GENERATED: int                 = 0
   PCD_MGR_14443A_POLLING: int                  = 1
   PCD_MGR_14443A_SELECTED: int                 = 2
@@ -484,7 +484,7 @@ class uFRresponseError(Exception):
 
 
 class uFRopenError(Exception):
-  """Exception raised when an error occurs opening a uFR device
+  """Exception raised when an error occurs when opening a uFR device
   """
 
   def __init__(self: uFRopenError,
@@ -497,11 +497,29 @@ class uFRopenError(Exception):
 
 
 
-class uFR:
+class uFRIOError(Exception):
+  """Exception raised when an error occurs doing an invalid I/O operation
+  """
 
-  def __init__(self: uFR) \
+  def __init__(self: uFRIOError,
+		message: str = "") \
 		-> None:
     """__init__ method
+    """
+    self.message = message
+    super().__init__(self.message)
+
+
+
+class uFR:
+
+  def __init__(self: uFR,
+		dev: Optional[str] = None,
+		restore_on_close: bool = False,
+		timeout: float = _default_ufr_timeout) \
+		-> None:
+    """__init__ method
+    if a device is specified, open the device
     """
 
     ### Constants
@@ -509,31 +527,29 @@ class uFR:
     self.__UFR_HEADER_VALS: Tuple[int, ...]  = tuple(map(int, uFRhead))
     self.__UFR_CMD_VALS: Tuple[int, ...]     = tuple(map(int, uFRcmd))
     self.__UFR_ERR_VALS: Tuple[int, ...]     = tuple(map(int, uFRerr))
-    self.__UFR_VAL_TO_CARD_TYPE: Dict[int, uFRcardtype] = \
-			{ct.value: ct for ct in uFRcardtype}
-    self.__UFR_VAL_TO_DL_CARD_TYPE: Dict[int, uFRdlcardtype] = \
-			{dlct.value: dlct for dlct in uFRdlcardtype}
-    self.__UFR_VAL_TO_EMU_MODE: Dict[int, uFRemumode] = \
-			{em.value: em for em in uFRemumode}
-    self.__UFR_VAL_TO_EMU_STATE: Dict[int, uFRemustate] = \
-			{st.value: st for st in uFRemustate}
-    self.__UFR_VAL_TO_PCD_MGR_STATE: Dict[int, uFRpcdmgrstate] = \
-			{pmst.value: pmst for pmst in uFRpcdmgrstate}
+    self.__UFR_VAL_TO_CARD_TYPE: Dict[int, uFRcardType] = \
+			{ct.value: ct for ct in uFRcardType}
+    self.__UFR_VAL_TO_DL_CARD_TYPE: Dict[int, uFRDLCardType] = \
+			{dlct.value: dlct for dlct in uFRDLCardType}
+    self.__UFR_VAL_TO_EMU_MODE: Dict[int, uFRemuMode] = \
+			{em.value: em for em in uFRemuMode}
+    self.__UFR_VAL_TO_EMU_STATE: Dict[int, uFRemuState] = \
+			{st.value: st for st in uFRemuState}
+    self.__UFR_VAL_TO_PCD_MGR_STATE: Dict[int, uFRPCDMgrState] = \
+			{pmst.value: pmst for pmst in uFRPCDMgrState}
     self.__UFR_VAL_TO_CMD: Dict[int, uFRcmd] = \
 			{cmd.value: cmd for cmd in uFRcmd}
     self.__UFR_VAL_TO_ERR: Dict[int, uFRerr] = \
 			{err.value: err for err in uFRerr}
-    self.__UFR_VAL_TO_IOSTATE: Dict[int, uFRiostate] = \
-			{iostate.value: iostate for iostate in uFRiostate}
+    self.__UFR_VAL_TO_IOSTATE: Dict[int, uFRIOState] = \
+			{iostate.value: iostate for iostate in uFRIOState}
 
     # Leave sleep mode parameters
     self.__WAKE_UP_BYTE: int                        = 0x00
     self.__WAKE_UP_WAIT: float                      = .01 #s
 
-
-
-
-    self.serdev: Optional[Serial] = None
+    ### Variables
+    self.serdev: Optional[serial.Serial] = None
 
     self.udpsock: Optional[socket.socket] = None
     self.udphost: Optional[str] = None
@@ -544,8 +560,8 @@ class uFR:
     self.resturl: Optional[str] = None
     self.postdata: str = ""
 
-    self.default_timeout: float = _default_ufr_timeout
-    self.current_timeout: float = _default_ufr_timeout
+    self.default_timeout: float = timeout
+    self.current_timeout: float = timeout
 
     self.recbuf: list = []
 
@@ -553,22 +569,34 @@ class uFR:
 
     self.answer = uFRanswer()
 
+    self.__saved_pcd_mgr_state: Optional[uFRPCDMgrState] = None
+    self.__saved_emu_mode: Optional[uFRemuMode] = None
+    self.__saved_anti_collision_enabled: Optional[bool] = None
+
+    # Open the device if it was specified
+    if dev is not None:
+      self.open(dev, restore_on_close = restore_on_close, timeout = timeout)
+
 
 
   def open(self: uFR,
 		dev: str = _default_ufr_device,
+		restore_on_close: bool = False,
 		timeout: float = _default_ufr_timeout) \
-		-> None:
+		-> Union[serial.Serial, socket.socket, str]:
     """Open a connection. The device format is one of:
+
     serial://<device file>:<baudrate>
     udp://<host>:<port>
     tcp://<host>:<port>
     http://<host>/uartX
+
+    Return the device handler if the caller wants to work directly with it
     """
 
     # Throw an exception if a device is already open
-    while self.serdev is not None or self.udpsock is not None or \
-		self.tcpsock is not None:
+    if self.serdev is not None or self.udpsock is not None or \
+		self.tcpsock is not None or self.resturl is not None:
       raise uFRopenError("device already open")
 
     # Find out the protocol and associated parameters
@@ -589,30 +617,42 @@ class uFR:
         proto = ""
 
     # Open the device
+    device_handle: Union[serial.Serial, socket.socket, str]
+
     if proto == "serial":
-      self.serdev = Serial(p1, int(p2), timeout = timeout)
+      self.serdev = serial.Serial(p1, int(p2), timeout = timeout)
+      device_handle = self.serdev
 
     elif proto == "udp":
       self.udpsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
       self.udpsock.settimeout(timeout)
       self.udphost = socket.gethostbyname(p1)
       self.udpport = int(p2)
+      device_handle = self.udpsock
 
     elif proto == "tcp":
       self.tcpsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
       self.tcpsock.settimeout(timeout)
       self.tcpsock.connect((socket.gethostbyname(p1), int(p2)))
+      device_handle = self.tcpsock
 
     elif proto == "http":
       self.resturl = p1
+      device_handle = self.resturl
 
     else:
       raise uFRopenError("unknown uFR device {}".format(dev))
-      return
 
     self.default_timeout = timeout
     self.current_timeout = timeout
-    return
+
+    # Get the current state of the reader if needed
+    if restore_on_close:
+      if self.get_reader_status(save_status = True, timeout = timeout)[1] == \
+		uFRemuMode.TAG_EMU_DISABLED:
+        self.get_anti_collision_status(save_status = True, timeout = timeout)
+
+    return device_handle
 
 
 
@@ -625,7 +665,7 @@ class uFR:
     while self.serdev is not None or self.udpsock is not None or \
 		self.tcpsock is not None:
       try:
-        self._get_data(timeout)
+        self._get_data(timeout = timeout)
       except TimeoutError:
         return
       except socket.timeout:
@@ -671,6 +711,11 @@ class uFR:
     """Send a data packet
     """
 
+    # Throw an exception if a device is not open
+    if self.serdev is None and self.udpsock is None and \
+		self.tcpsock is None and self.resturl is None:
+      raise uFRIOError("device not open")
+
     # Send to a serial device
     if self.serdev is not None:
       self.serdev.write(data)
@@ -695,6 +740,11 @@ class uFR:
 		-> bytes:
     """Receive data
     """
+
+    # Throw an exception if a device is not open
+    if self.serdev is None and self.udpsock is None and \
+		self.tcpsock is None and self.resturl is None:
+      raise uFRIOError("device not open")
 
     data: bytes
 
@@ -721,7 +771,10 @@ class uFR:
       timeout_tstamp = datetime.now().timestamp() + self.current_timeout
       data = b""
       while not data:
-        data, fromhostport = self.udpsock.recvfrom(1024)
+        try:
+          data, fromhostport = self.udpsock.recvfrom(1024)
+        except socket.timeout:
+          raise TimeoutError
         if fromhostport[0] != self.udphost:
           data = b""
         if not data and datetime.now().timestamp() >= timeout_tstamp:
@@ -731,12 +784,18 @@ class uFR:
     elif self.tcpsock is not None:
       if reset_timeout:
         self.tcpsock.settimeout(self.current_timeout)
-      data = self.tcpsock.recv(1024)
+      try:
+        data = self.tcpsock.recv(1024)
+      except socket.timeout:
+        raise TimeoutError
 
     # Receive a POST reply from a HTTP server
     elif self.resturl is not None:
-      resp: str = requests.post(self.resturl, data = self.postdata,
+      try:
+        resp: str = requests.post(self.resturl, data = self.postdata,
 			timeout = self.current_timeout).text.rstrip("\r\n\0 ")
+      except requests.exceptions.ConnectTimeout:
+        raise TimeoutError
       if not re.match("^([0-9a-zA-Z][0-9a-zA-Z])+$", resp):
         if not resp:
           raise uFRresponseError("empty HTTP POST response")
@@ -798,7 +857,7 @@ class uFR:
 
     self._send_cmd(cmd, par0, par1, ext_len)
 
-    answer: uFRanswer = self._get_answer(timeout)
+    answer: uFRanswer = self._get_answer(timeout = timeout)
 
     if not answer.is_ack or answer.code != cmd.value:
       raise uFRresponseError("expected ACK to {}, ext_len={}, "
@@ -823,7 +882,7 @@ class uFR:
 
       # Read data if the receive buffer is empty
       if not self.recbuf:
-        self.recbuf.extend(self._get_data(timeout))
+        self.recbuf.extend(self._get_data(timeout = timeout))
 
       # Parse the receive buffer
       b: int = self.recbuf.pop(0)
@@ -944,25 +1003,25 @@ class uFR:
 
     # Read data if the receive buffer is empty
     if not self.recbuf:
-      data = self._get_data(timeout)
+      data = self._get_data(timeout = timeout)
       self.recbuf.extend(data)
 
     # Parse one byte
     b: int = self.recbuf.pop(0)
 
     # Did we get an ACK?
-    if b == uFRcmdextpartack.ACK_PART:
+    if b == uFRcmdExtPartAck.ACK_PART:
       return True
-    if b == uFRcmdextpartack.ACK_LAST_PART:
+    if b == uFRcmdExtPartAck.ACK_LAST_PART:
       return False
 
     # We got an expected byte
     raise uFRresponseError("expected {} ({:02x}h) or {} ({:02x}h) - "
 				"got {:02x}h".format(
-				uFRcmdextpartack.ACK_PART.name,
-				uFRcmdextpartack.ACK_PART.value,
-				uFRcmdextpartack.ACK_LAST_PART.name,
-				uFRcmdextpartack.ACK_LAST_PART.value, b))
+				uFRcmdExtPartAck.ACK_PART.name,
+				uFRcmdExtPartAck.ACK_PART.value,
+				uFRcmdExtPartAck.ACK_LAST_PART.name,
+				uFRcmdExtPartAck.ACK_LAST_PART.value, b))
 
 
 
@@ -973,7 +1032,7 @@ class uFR:
     answer is unexpected
     """
 
-    answer: uFRanswer = self._get_answer(timeout)
+    answer: uFRanswer = self._get_answer(timeout = timeout)
     if not answer.is_rsp or answer.code != self.last_cmd:
       raise uFRresponseError("expected response to {} - got {}".format(
 				self.last_cmd.name, answer))
@@ -981,10 +1040,72 @@ class uFR:
 
 
 
-  def close(self: uFR) \
-		-> None:
-    """Close any open connection
+  def _restore_reader(self: uFR,
+			timeout: Optional[float] = None) \
+			-> None:
+    """Restore the saved state of the reader, if it has been saved
     """
+
+    pcd_mgr_state: uFRPCDMgrState
+    emu_mode: uFRemuMode
+
+    # Should we restore the emulation / ad-hoc (peer-to-peer) modes?
+    if self.__saved_pcd_mgr_state is not None and \
+		self.__saved_emu_mode is not None:
+
+      pcd_mgr_state, emu_mode, _ = self.get_reader_status(timeout = timeout)
+
+      # Should we disable emulation - tag emulation or ad-hoc (peer-to-peer)?
+      if self.__saved_emu_mode == uFRemuMode.TAG_EMU_DISABLED:
+        if emu_mode != uFRemuMode.TAG_EMU_DISABLED:
+          if pcd_mgr_state == uFRPCDMgrState.PCD_MGR_CE_DEDICATED:
+            self.tag_emulation_stop(timeout = timeout)
+          else:
+            self.ad_hoc_emulation_stop(timeout = timeout)
+
+      # Should we enable tag emulation?
+      elif self.__saved_pcd_mgr_state == uFRPCDMgrState.PCD_MGR_CE_DEDICATED:
+        if emu_mode == uFRemuMode.TAG_EMU_DISABLED or \
+		pcd_mgr_state != uFRPCDMgrState.PCD_MGR_CE_DEDICATED:
+            self.tag_emulation_start(timeout = timeout)
+
+      # Should we enable ad-hoc (peer-to-peer)?
+      else:
+        if pcd_mgr_state == uFRPCDMgrState.PCD_MGR_CE_DEDICATED:
+          self.tag_emulation_stop(timeout = timeout)
+        self.ad_hoc_emulation_start(timeout = timeout)
+
+    # Should we restore the anti-collision mode?
+    if self.__saved_anti_collision_enabled is not None and \
+		self.get_reader_status(timeout = timeout)[1] == \
+		uFRemuMode.TAG_EMU_DISABLED:
+
+      ac_enabled: bool
+      ac_tag_sel: bool
+      ac_enabled, ac_tag_sel = self.get_anti_collision_status(timeout = timeout)
+
+      if self.__saved_anti_collision_enabled and not ac_enabled:
+        self.enable_anti_collision(timeout = timeout)
+
+      elif not self.__saved_anti_collision_enabled:
+        if ac_tag_sel:
+          self.deselect_card(timeout = timeout)
+        if ac_enabled:
+          self.disable_anti_collision(timeout = timeout)
+
+
+
+  def close(self: uFR,
+		restore = True,
+		timeout: Optional[float] = None) \
+		-> None:
+    """Close any open connections
+    By default, restore the reader if restore_on_reader was asserted on opening
+    """
+
+    if restore and self.serdev is not None or self.udpsock is not None or \
+		self.tcpsock is not None or self.resturl is not None:
+      self._restore_reader(timeout = timeout)
 
     if self.serdev is not None:
       self.serdev.close()
@@ -1014,10 +1135,30 @@ class uFR:
 
 
 
-  def __del__(self: uFR) \
-		-> None:
-    """__del__ method
+  def __enter__(self: uFR) \
+		-> uFR:
+    """__enter__ method
     """
+    return self
+
+
+
+  def __exit__(self: uFR,
+		exc_type: Optional[Type[BaseException]],
+		exc_value: Optional[BaseException],
+		exc_traceback: Optional[TracebackType]) \
+		-> None:
+    """__exit__ method
+    """
+
+    # If we got here from an exception and we have saved reader states to
+    # restore, make sure the read buffer is empty before issuing further
+    # commands to the device
+    if exc_type is not None and (
+		self.__saved_pcd_mgr_state is not None or \
+		self.__saved_emu_mode is not None or \
+		self.__saved_anti_collision_enabled is not None):
+      self.flush()
 
     self.close()
 
@@ -1063,7 +1204,7 @@ class uFR:
     """Probe an entire subnet for Nano Onlines. Uses threads
     """
 
-    ip_net: IPv4Network = ip_network(netaddr)
+    ip_net: ipaddress.IPv4Network = ipaddress.ip_network(netaddr)
 
     t: ThreadPool = ThreadPool(processes = _subnet_probe_concurrent_connections)
 
@@ -1087,7 +1228,7 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.GET_READER_TYPE)
-    rsp: uFRanswer = self._get_last_command_response(timeout)
+    rsp: uFRanswer = self._get_last_command_response(timeout = timeout)
     return rsp.ext[0] + (rsp.ext[1] << 8) + \
 		(rsp.ext[2] << 16) + (rsp.ext[3] << 24) \
 		if isinstance(rsp.ext, list) else -1
@@ -1101,7 +1242,7 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.GET_READER_SERIAL)
-    rsp: uFRanswer = self._get_last_command_response(timeout)
+    rsp: uFRanswer = self._get_last_command_response(timeout = timeout)
     return rsp.ext[0] + (rsp.ext[1] << 8) + \
 		(rsp.ext[2] << 16) + (rsp.ext[3] << 24)
 
@@ -1114,7 +1255,7 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.GET_SERIAL_NUMBER)
-    rsp: uFRanswer = self._get_last_command_response(timeout)
+    rsp: uFRanswer = self._get_last_command_response(timeout = timeout)
     return bytes(rsp.ext).decode("ascii")
 
 
@@ -1126,7 +1267,7 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.GET_HARDWARE_VERSION)
-    rsp: uFRanswer = self._get_last_command_response(timeout)
+    rsp: uFRanswer = self._get_last_command_response(timeout = timeout)
     return (rsp.val0 << 8) + rsp.val1
 
 
@@ -1138,7 +1279,7 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.GET_FIRMWARE_VERSION)
-    rsp: uFRanswer = self._get_last_command_response(timeout)
+    rsp: uFRanswer = self._get_last_command_response(timeout = timeout)
     return (rsp.val0 << 8) + rsp.val1
 
 
@@ -1150,25 +1291,25 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.GET_BUILD_NUMBER)
-    return self._get_last_command_response(timeout).val0
+    return self._get_last_command_response(timeout = timeout).val0
 
 
 
   def get_card_id(self: uFR,
 			timeout: Optional[float] = None) \
-			-> Tuple[uFRcardtype, int]:
+			-> Tuple[uFRcardType, int]:
     """Get the card type and UID (4 bytes only)
     """
 
     self._send_cmd(uFRcmd.GET_CARD_ID)
     try:
-      rsp: uFRanswer = self._get_last_command_response(timeout)
+      rsp: uFRanswer = self._get_last_command_response(timeout = timeout)
     except:
       if self.answer.code == uFRerr.NO_CARD:
-        return (uFRcardtype._NO_CARD, 0)
+        return (uFRcardType._NO_CARD, 0)
       else:
         raise
-    return (self.__UFR_VAL_TO_CARD_TYPE.get(rsp.val0, uFRcardtype._UNDEFINED),
+    return (self.__UFR_VAL_TO_CARD_TYPE.get(rsp.val0, uFRcardType._UNDEFINED),
 		(rsp.ext[0] << 24) + (rsp.ext[1] << 16) + \
 		(rsp.ext[2] << 8) + rsp.ext[3])
 
@@ -1176,64 +1317,64 @@ class uFR:
 
   def get_card_id_ex(self: uFR,
 			timeout: Optional[float] = None) \
-			-> Tuple[uFRcardtype, str]:
+			-> Tuple[uFRcardType, str]:
     """Get the card type and UID (4, 7 or 10 bytes)
     """
 
     self._send_cmd(uFRcmd.GET_CARD_ID_EX)
     try:
-      rsp: uFRanswer = self._get_last_command_response(timeout)
+      rsp: uFRanswer = self._get_last_command_response(timeout = timeout)
     except:
       if self.answer.code == uFRerr.NO_CARD:
-        return (uFRcardtype._NO_CARD, "")
+        return (uFRcardType._NO_CARD, "")
       else:
         raise
-    return (self.__UFR_VAL_TO_CARD_TYPE.get(rsp.val0, uFRcardtype._UNDEFINED),
+    return (self.__UFR_VAL_TO_CARD_TYPE.get(rsp.val0, uFRcardType._UNDEFINED),
 		self._uid_bytes2str(rsp.ext[:rsp.val1]))
 
 
 
   def get_last_card_id_ex(self: uFR,
 				timeout: Optional[float] = None) \
-				-> Tuple[uFRcardtype, str]:
+				-> Tuple[uFRcardType, str]:
     """Get the last read card type and UID (4, 7 or 10 bytes)
     Return () if no card was last read
     """
 
     self._send_cmd(uFRcmd.GET_LAST_CARD_ID_EX)
     try:
-      rsp = self._get_last_command_response(timeout)
+      rsp = self._get_last_command_response(timeout = timeout)
     except:
       if self.answer.code == uFRerr.NO_CARD:
-        return (uFRcardtype._NO_CARD, "")
+        return (uFRcardType._NO_CARD, "")
       else:
         raise
-    return (self.__UFR_VAL_TO_CARD_TYPE.get(rsp.val0, uFRcardtype._UNDEFINED),
+    return (self.__UFR_VAL_TO_CARD_TYPE.get(rsp.val0, uFRcardType._UNDEFINED),
 		self._uid_bytes2str(rsp.ext[:rsp.val1]))
 
 
 
   def get_dlogic_card_type(self: uFR,
 				timeout: Optional[float] = None) \
-				-> uFRdlcardtype:
+				-> uFRDLCardType:
     """Get the Digital Logic card type
     """
 
     self._send_cmd(uFRcmd.GET_DLOGIC_CARD_TYPE)
     try:
-      rsp = self._get_last_command_response(timeout)
+      rsp = self._get_last_command_response(timeout = timeout)
     except:
       if self.answer.code == uFRerr.NO_CARD:
-        return uFRdlcardtype._NO_CARD
+        return uFRDLCardType._NO_CARD
       else:
         raise
     return self.__UFR_VAL_TO_DL_CARD_TYPE.get(rsp.val0,
-						uFRdlcardtype._UNDEFINED)
+						uFRDLCardType._UNDEFINED)
 
 
 
   def linear_read(self: uFR,
-			authmode: uFRauthmode,
+			authmode: uFRauthMode,
 			addr: int,
 			length: int,
 			key: Union[List[int], Tuple[int, ...], bytes, int] = 0,
@@ -1248,7 +1389,7 @@ class uFR:
     part1: int
     cmdext: List[int] = [addr & 0xff, addr >> 8]
 
-    if authmode in (uFRauthmode.RKA_AUTH1A, uFRauthmode.RKA_AUTH1B):
+    if authmode in (uFRauthMode.RKA_AUTH1A, uFRauthMode.RKA_AUTH1B):
       if isinstance(key, int):
         par1 = key
       else:
@@ -1258,31 +1399,12 @@ class uFR:
       else:
         cmdext.extend([0, 192, length & 0xff, length >> 8])
 
-    elif authmode in (uFRauthmode.AKM1_AUTH1A, uFRauthmode.AKM1_AUTH1B,
-		uFRauthmode.AKM2_AUTH1A, uFRauthmode.AKM2_AUTH1B):
+    elif authmode in (uFRauthMode.AKM1_AUTH1A, uFRauthMode.AKM1_AUTH1B,
+		uFRauthMode.AKM2_AUTH1A, uFRauthMode.AKM2_AUTH1B):
       par1 = 0
       cmdext.extend([length & 0xff, length >> 8])
 
-    elif authmode in (uFRauthmode.PK_AUTH1A, uFRauthmode.PK_AUTH1B):
-      par1 = 0
-      cmdext.extend([length & 0xff, length >> 8])
-      if isinstance(key, list) or isinstance(key, tuple) or \
-		isinstance(key, bytes):
-        cmdext.extend(list(key))
-      else:
-        raise TypeError("key should be a tuple, list or bytes")
-
-    elif authmode in (uFRauthmode.SAM_KEY_AUTH1A, uFRauthmode.SAM_KEY_AUTH1B):
-      if isinstance(key, int):
-        par1 = key
-      else:
-        raise TypeError("key should be an int")
-      if length < 192 or not multiblock:
-        cmdext.extend([length & 0xff, length >> 8])
-      else:
-        cmdext.extend([0, 192, length & 0xff, length >> 8])
-
-    elif authmode in (uFRauthmode.PK_AUTH1A_AES, uFRauthmode.PK_AUTH1B_AES):
+    elif authmode in (uFRauthMode.PK_AUTH1A, uFRauthMode.PK_AUTH1B):
       par1 = 0
       cmdext.extend([length & 0xff, length >> 8])
       if isinstance(key, list) or isinstance(key, tuple) or \
@@ -1291,7 +1413,7 @@ class uFR:
       else:
         raise TypeError("key should be a tuple, list or bytes")
 
-    elif authmode in (uFRauthmode.MFP_RKA_AUTH1A, uFRauthmode.MFP_RKA_AUTH1B):
+    elif authmode in (uFRauthMode.SAM_KEY_AUTH1A, uFRauthMode.SAM_KEY_AUTH1B):
       if isinstance(key, int):
         par1 = key
       else:
@@ -1301,15 +1423,34 @@ class uFR:
       else:
         cmdext.extend([0, 192, length & 0xff, length >> 8])
 
-    elif authmode in (uFRauthmode.MFP_AKM1_AUTH1A, uFRauthmode.MFP_AKM1_AUTH1B,
-		uFRauthmode.MFP_AKM2_AUTH1A, uFRauthmode.MFP_AKM2_AUTH1B):
+    elif authmode in (uFRauthMode.PK_AUTH1A_AES, uFRauthMode.PK_AUTH1B_AES):
+      par1 = 0
+      cmdext.extend([length & 0xff, length >> 8])
+      if isinstance(key, list) or isinstance(key, tuple) or \
+		isinstance(key, bytes):
+        cmdext.extend(list(key))
+      else:
+        raise TypeError("key should be a tuple, list or bytes")
+
+    elif authmode in (uFRauthMode.MFP_RKA_AUTH1A, uFRauthMode.MFP_RKA_AUTH1B):
+      if isinstance(key, int):
+        par1 = key
+      else:
+        raise TypeError("key should be an int")
+      if length < 192 or not multiblock:
+        cmdext.extend([length & 0xff, length >> 8])
+      else:
+        cmdext.extend([0, 192, length & 0xff, length >> 8])
+
+    elif authmode in (uFRauthMode.MFP_AKM1_AUTH1A, uFRauthMode.MFP_AKM1_AUTH1B,
+		uFRauthMode.MFP_AKM2_AUTH1A, uFRauthMode.MFP_AKM2_AUTH1B):
       par1 = 0
       cmdext.extend([length & 0xff, length >> 8])
 
     # Send the command and read back the data
     self._send_cmd_ext(uFRcmd.LINEAR_READ, par1, 0, cmdext, timeout)
     try:
-      rsp = self._get_last_command_response(timeout)
+      rsp = self._get_last_command_response(timeout = timeout)
     except:
       if self.answer.code == uFRerr.NO_CARD:
         return b""
@@ -1321,20 +1462,20 @@ class uFR:
 
 
   def get_rf_analog_settings(self: uFR,
-				tag_comm_type: uFRtagcommtype,
+				tag_comm_type: uFRtagCommType,
 				timeout: Optional[float] = None) \
 				-> List[int]:
     """Get the RF frontend's analog settings
     """
 
     self._send_cmd(uFRcmd.GET_RF_ANALOG_SETTINGS, tag_comm_type.value)
-    rsp = self._get_last_command_response(timeout)
+    rsp = self._get_last_command_response(timeout = timeout)
     return rsp.ext
 
 
 
   def set_rf_analog_settings(self: uFR,
-				tag_comm_type: uFRtagcommtype,
+				tag_comm_type: uFRtagCommType,
 				factory_settings: bool,
 				settings: List[int],
 				timeout: Optional[float] = None) \
@@ -1344,7 +1485,7 @@ class uFR:
 
     self._send_cmd_ext(uFRcmd.SET_RF_ANALOG_SETTINGS, tag_comm_type,
 			1 if factory_settings else 0, settings, timeout)
-    self._get_last_command_response(timeout)
+    self._get_last_command_response(timeout = timeout)
 
 
 
@@ -1356,7 +1497,7 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.SET_LED_CONFIG, 1 if blink else 0)
-    self._get_last_command_response(timeout)
+    self._get_last_command_response(timeout = timeout)
 
 
 
@@ -1367,7 +1508,7 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.ENTER_SLEEP_MODE)
-    self._get_last_command_response(timeout)
+    self._get_last_command_response(timeout = timeout)
 
 
 
@@ -1380,7 +1521,7 @@ class uFR:
     self._send_data([self.__WAKE_UP_BYTE])
     sleep(self.__WAKE_UP_WAIT)
     self._send_cmd(uFRcmd.LEAVE_SLEEP_MODE)
-    self._get_last_command_response(timeout)
+    self._get_last_command_response(timeout = timeout)
     sleep(_post_wake_up_wait)
 
 
@@ -1392,7 +1533,7 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.RF_RESET)
-    self._get_last_command_response(timeout)
+    self._get_last_command_response(timeout = timeout)
 
 
 
@@ -1407,7 +1548,7 @@ class uFR:
 
     self._send_cmd(uFRcmd.CHECK_UID_CHANGE)
     try:
-      self._get_last_command_response(timeout)
+      self._get_last_command_response(timeout = timeout)
     except:
       if self.answer.code == uFRerr.READING_ERROR:
         return False
@@ -1418,16 +1559,25 @@ class uFR:
 
 
   def get_reader_status(self: uFR,
+			save_status: bool = False,
 			timeout: Optional[float] = None) \
-			-> Tuple[uFRpcdmgrstate, uFRemumode, uFRemustate]:
-    """Get the states of the reader
+			-> Tuple[uFRPCDMgrState, uFRemuMode, uFRemuState]:
+    """Get the status of the reader
+    If save_status is asserted, save the status to restore it on closing
     """
 
     self._send_cmd(uFRcmd.GET_READER_STATUS)
-    rsp: uFRanswer = self._get_last_command_response(timeout)
-    return (self.__UFR_VAL_TO_PCD_MGR_STATE[rsp.ext[0]],
-		self.__UFR_VAL_TO_EMU_MODE[rsp.ext[1]],
-		self.__UFR_VAL_TO_EMU_STATE[rsp.ext[2]])
+    rsp: uFRanswer = self._get_last_command_response(timeout = timeout)
+
+    pcd_mgr_state: uFRPCDMgrState = self.__UFR_VAL_TO_PCD_MGR_STATE[rsp.ext[0]]
+    emu_mode: uFRemuMode = self.__UFR_VAL_TO_EMU_MODE[rsp.ext[1]]
+    emu_state: uFRemuState = self.__UFR_VAL_TO_EMU_STATE[rsp.ext[2]]
+
+    if save_status:
+      self.__saved_pcd_mgr_state = pcd_mgr_state
+      self.__saved_emu_mode = emu_mode
+
+    return (pcd_mgr_state, emu_mode, emu_state)
 
 
 
@@ -1438,7 +1588,7 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.SELF_RESET)
-    self._get_last_command_response(timeout)
+    self._get_last_command_response(timeout = timeout)
     sleep(_post_reset_wait)
 
 
@@ -1482,25 +1632,25 @@ class uFR:
 
     # Wait for ACKs and send subsequent parts if we have more than one part
     if ext_parts:
-      while self._get_cmd_ext_part_ack(timeout):
+      while self._get_cmd_ext_part_ack(timeout = timeout):
         if not ext_parts:
           raise uFRresponseError("expected {} ({:02x}h) - got {} ({:02x}h) with"
 					"no more CMD_EXT parts to send".format(
-					uFRcmdextpartack.ACK_LAST_PART.name,
-					uFRcmdextpartack.ACK_LAST_PART.value,
-					uFRcmdextpartack.ACK_PART.name,
-					uFRcmdextpartack.ACK_PART.value))
+					uFRcmdExtPartAck.ACK_LAST_PART.name,
+					uFRcmdExtPartAck.ACK_LAST_PART.value,
+					uFRcmdExtPartAck.ACK_PART.name,
+					uFRcmdExtPartAck.ACK_PART.value))
         self._send_data(ext_parts.pop(0))
 
     if ext_parts:
       raise uFRresponseError("expected {} ({:02x}h) - got {} ({:02x}h) "
 				"before sending the last CMD_EXT part".format(
-				uFRcmdextpartack.ACK_PART.name,
-				uFRcmdextpartack.ACK_PART.value,
-				uFRcmdextpartack.ACK_LAST_PART.name,
-				uFRcmdextpartack.ACK_LAST_PART.value))
+				uFRcmdExtPartAck.ACK_PART.name,
+				uFRcmdExtPartAck.ACK_PART.value,
+				uFRcmdExtPartAck.ACK_LAST_PART.name,
+				uFRcmdExtPartAck.ACK_LAST_PART.value))
 
-    self._get_last_command_response(timeout)
+    self._get_last_command_response(timeout = timeout)
     sleep(_post_write_emulation_ndef_wait)
 
 
@@ -1513,7 +1663,7 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.TAG_EMULATION_START, 1 if ram_ndef else 0)
-    self._get_last_command_response(timeout)
+    self._get_last_command_response(timeout = timeout)
     sleep(_post_emulation_start_stop_wait)
 
 
@@ -1525,7 +1675,7 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.TAG_EMULATION_STOP)
-    self._get_last_command_response(timeout)
+    self._get_last_command_response(timeout = timeout)
     sleep(_post_emulation_start_stop_wait)
 
 
@@ -1537,7 +1687,7 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.AD_HOC_EMULATION_START)
-    self._get_last_command_response(timeout)
+    self._get_last_command_response(timeout = timeout)
     sleep(_post_emulation_start_stop_wait)
 
 
@@ -1549,7 +1699,7 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.AD_HOC_EMULATION_STOP)
-    self._get_last_command_response(timeout)
+    self._get_last_command_response(timeout = timeout)
     sleep(_post_emulation_start_stop_wait)
 
 
@@ -1561,7 +1711,7 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.GET_EXTERNAL_FIELD_STATE)
-    return self._get_last_command_response(timeout).val0 == 1
+    return self._get_last_command_response(timeout = timeout).val0 == 1
 
 
 
@@ -1573,7 +1723,7 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.GET_AD_HOC_EMULATION_PARAMS)
-    rsp: uFRanswer = self._get_last_command_response(timeout)
+    rsp: uFRanswer = self._get_last_command_response(timeout = timeout)
     return (rsp.val0, rsp.val1)
 
 
@@ -1588,7 +1738,7 @@ class uFR:
 
     self._send_cmd(uFRcmd.SET_AD_HOC_EMULATION_PARAMS, rxthreshold,
 							rfcfg & 0x7f)
-    self._get_last_command_response(timeout)
+    self._get_last_command_response(timeout = timeout)
 
 
 
@@ -1600,13 +1750,13 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.RED_LIGHT_CONTROL, 1 if state else 0)
-    self._get_last_command_response(timeout)
+    self._get_last_command_response(timeout = timeout)
 
 
 
   def user_interface_signal(self: uFR,
-				light_signal_mode: uFRlightsignal,
-				beep_signal_mode: uFRbeepsignal,
+				light_signal_mode: uFRlightSignal,
+				beep_signal_mode: uFRbeepSignal,
 				timeout: Optional[float] = None) \
 				-> None:
     """Trigger a LED sequence or beep sequence
@@ -1614,7 +1764,7 @@ class uFR:
 
     self._send_cmd(uFRcmd.USER_INTERFACE_SIGNAL, light_signal_mode.value,
 			beep_signal_mode.value)
-    self._get_last_command_response(timeout)
+    self._get_last_command_response(timeout = timeout)
 
 
 
@@ -1629,7 +1779,7 @@ class uFR:
     period: int = ((round(65535 - 1500000 / (2 * frequency))) & 0xffff) \
 		if frequency else 0xffff
     self._send_cmd(uFRcmd.SET_SPEAKER_FREQUENCY, period & 0xff, period >> 8)
-    self._get_last_command_response(timeout)
+    self._get_last_command_response(timeout = timeout)
 
 
 
@@ -1640,7 +1790,7 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.SET_ISO14443_4_MODE)
-    self._get_last_command_response(timeout)
+    self._get_last_command_response(timeout = timeout)
 
 
 
@@ -1652,7 +1802,7 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.S_BLOCK_DESELECT)
-    self._get_last_command_response(timeout)
+    self._get_last_command_response(timeout = timeout)
 
 
 
@@ -1670,7 +1820,7 @@ class uFR:
 			round(self.default_timeout * 1000) \
 			if apdu_timeout_ms is None else apdu_timeout_ms,
 			c_apdu, timeout)
-    return bytes(self._get_last_command_response(timeout).ext)
+    return bytes(self._get_last_command_response(timeout = timeout).ext)
 
 
 
@@ -1681,7 +1831,7 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.ENABLE_ANTI_COLLISION)
-    self._get_last_command_response(timeout)
+    self._get_last_command_response(timeout = timeout)
 
 
 
@@ -1692,7 +1842,7 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.DISABLE_ANTI_COLLISION)
-    self._get_last_command_response(timeout)
+    self._get_last_command_response(timeout = timeout)
 
 
 
@@ -1705,7 +1855,7 @@ class uFR:
 
     self._send_cmd(uFRcmd.ENUM_CARDS)
     try:
-      self._get_last_command_response(timeout)
+      self._get_last_command_response(timeout = timeout)
     except:
       if self.answer.code == uFRerr.NO_CARDS_ENUMERATED:
         return False
@@ -1724,7 +1874,7 @@ class uFR:
 
     self._send_cmd(uFRcmd.LIST_CARDS)
     try:
-      rsp: uFRanswer = self._get_last_command_response(timeout)
+      rsp: uFRanswer = self._get_last_command_response(timeout = timeout)
     except:
       if self.answer.code == uFRerr.NO_CARDS_ENUMERATED:
         return []
@@ -1738,14 +1888,14 @@ class uFR:
   def select_card(self: uFR,
 			uid: str,
 			timeout: Optional[float] = None) \
-			-> uFRdlcardtype:
+			-> uFRDLCardType:
     """Select a card in the field in anti-collision mode
     """
 
     bytesuid: bytes = self._uid_str2bytes(uid)
     self._send_cmd_ext(uFRcmd.SELECT_CARD, len(bytesuid), 0, bytesuid, timeout)
     return self.__UFR_VAL_TO_DL_CARD_TYPE[
-		self._get_last_command_response(timeout).val0]
+		self._get_last_command_response(timeout = timeout).val0]
 
 
 
@@ -1756,46 +1906,56 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.DESELECT_CARD)
-    self._get_last_command_response(timeout)
+    self._get_last_command_response(timeout = timeout)
 
 
 
   def get_anti_collision_status(self: uFR,
+				save_status: bool = False,
 				timeout: Optional[float] = None) \
 				-> Tuple[bool, bool]:
     """Return the status of the anti-collision mode, and whether a card is
     currently selected
+    If save_status is asserted, save the status to restore it on closing
     """
 
     self._send_cmd(uFRcmd.GET_ANTI_COLLISION_STATUS)
-    rsp = self._get_last_command_response(timeout)
-    return (rsp.val0 != 0, rsp.val1 != 0)
+    rsp = self._get_last_command_response(timeout = timeout)
+
+    anti_collision_enabled: bool = rsp.val0 != 0
+    anti_collision_card_selected: bool = rsp.val1 != 0
+
+    if save_status:
+      self.__saved_anti_collision_enabled = anti_collision_enabled
+
+    return (anti_collision_enabled, anti_collision_card_selected)
 
 
 
   def esp_set_io_state(self: uFR,
 			pin: int,
-			state: uFRiostate,
+			state: uFRIOState,
 			timeout: Optional[float] = None) \
 			-> None:
     """Set the state of one of the 6 ESP I/O pins
     """
 
     self._send_cmd(uFRcmd.ESP_SET_IO_STATE, pin, state.value)
-    self._get_last_command_response(timeout)
+    self._get_last_command_response(timeout = timeout)
 
 
 
   def esp_get_io_state(self: uFR,
 			timeout: Optional[float] = None) \
-			-> List[uFRiostate]:
+			-> List[uFRIOState]:
     """Get the states of the 6 ESP I/O pins
     return the states as a list
     """
 
     self._send_cmd(uFRcmd.ESP_GET_IO_STATE)
     return [self.__UFR_VAL_TO_IOSTATE[st]
-		for st in self._get_last_command_response(timeout).ext]
+		for st in self._get_last_command_response(
+		timeout = timeout).ext]
 
 
 
@@ -1817,7 +1977,7 @@ class uFR:
 
     self._send_cmd_ext(uFRcmd.ESP_SET_DISPLAY_DATA, duration_ms & 0xff,
 			duration_ms >> 8,list(rgb1) + list(rgb2), timeout)
-    self._get_last_command_response(timeout)
+    self._get_last_command_response(timeout = timeout)
 
 
 
@@ -1828,7 +1988,7 @@ class uFR:
     """
 
     self._send_cmd(uFRcmd.ESP_READER_RESET, 0)
-    self._get_last_command_response(timeout)
+    self._get_last_command_response(timeout = timeout)
     sleep(_post_reset_wait)
 
 
@@ -1952,14 +2112,14 @@ def __test_api(ufr: uFR) \
   # RF analog settings functions
   if __test_rf_analog_settings_functions:
 
-    tct: uFRtagcommtype
-    for tct in uFRtagcommtype:
+    tct: uFRtagCommType
+    for tct in uFRtagCommType:
       print(padded("GET_RF_ANALOG_SETTINGS:"), ufr.get_rf_analog_settings(tct))
 
       if __test_eeprom_writing_functions:
 
         new_settings: List[int] = list(ufr.answer.ext)
-        new_settings[PN53xanalogsettingsreg.RXTHRESHOLD] = 255
+        new_settings[PN53xAnalogSettingsReg.RXTHRESHOLD] = 255
         print("SET_RF_ANALOG_SETTINGS")
         ufr.set_rf_analog_settings(tct, False, new_settings)
 
@@ -2010,7 +2170,7 @@ def __test_api(ufr: uFR) \
     ufr.set_speaker_frequency(0)
 
     print("USER_INTERFACE_SIGNAL")
-    ufr.user_interface_signal(uFRlightsignal.ALTERNATION, uFRbeepsignal.SHORT)
+    ufr.user_interface_signal(uFRlightSignal.ALTERNATION, uFRbeepSignal.SHORT)
 
     # Only test the ESP LED function if the device is a Nano Online connected
     # through the network, but not in HTTP transparent mode, as transparent
@@ -2033,16 +2193,16 @@ def __test_api(ufr: uFR) \
   if __test_esp_io and (ufr.udpsock is not None or ufr.tcpsock is not None):
 
     print("ESP_SET_IO_STATE")
-    ufr.esp_set_io_state(6, uFRiostate.HIGH)
+    ufr.esp_set_io_state(6, uFRIOState.HIGH)
     print(padded("ESP_GET_IO_STATE"), ufr.esp_get_io_state())
     print("ESP_SET_IO_STATE")
-    ufr.esp_set_io_state(6, uFRiostate.LOW)
+    ufr.esp_set_io_state(6, uFRIOState.LOW)
     print(padded("ESP_GET_IO_STATE"), ufr.esp_get_io_state())
 
   # UID functions
   if __test_uid_functions:
 
-      cid: Tuple[uFRcardtype, int] = ufr.get_card_id()
+      cid: Tuple[uFRcardType, int] = ufr.get_card_id()
       print(padded("GET_CARD_ID:"),
 		(cid[0], "0x{:08X}".format(cid[1])) if cid else ())
       print(padded("GET_CARD_ID_EX:"), ufr.get_card_id_ex())
@@ -2052,7 +2212,7 @@ def __test_api(ufr: uFR) \
 
   # Test read functions
   if __test_read_functions:
-      print(padded("LINEAR_READ:"), ufr.linear_read(uFRauthmode.T2T_NO_PWD_AUTH,
+      print(padded("LINEAR_READ:"), ufr.linear_read(uFRauthMode.T2T_NO_PWD_AUTH,
 							0, 10))
 
   # Get ISO14443-4 functions

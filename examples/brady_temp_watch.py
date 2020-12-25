@@ -6,12 +6,11 @@ https://www.brady.co.uk/labels/rfid-temperature-labels
 ### Modules
 import re
 import sys
-import six
 import ndef
 import argparse
 
 sys.path.append("..")
-from pyufr import uFR, uFRauthmode
+from pyufr import uFR, uFRauthMode, uFRresponseError
 
 
 
@@ -28,13 +27,21 @@ if __name__ == "__main__":
 	)
   args = argparser.parse_args()
 
-  # Initialize the reader
-  ufr = uFR()
-  ufr.open(args.device)
+  # Open the reader (assert restore_on_close so the reader is automatically
+  # restored to the state we found it in upon closing)
+  with uFR(args.device, restore_on_close = True) as ufr:
 
-  try:
+    # Unconditionally exit any emulation mode the reader might be in, otherwise
+    # it won't accept the reset and anti-collision commands
+    ufr.tag_emulation_stop()
+    ufr.ad_hoc_emulation_stop()
 
-    ufr.self_reset()
+    # Stop polling and enable anti-collision
+    ufr.self_reset()			# Do this immediately before enabling
+					# anti-collision to force the reader to
+					# "let go" of any card in the field
+					# long enough to prevent polling from
+					# restarting before anti-collision is on
     ufr.enable_anti_collision()
 
     # Continuously read the tag
@@ -45,16 +52,51 @@ if __name__ == "__main__":
 
       # Get the Brady URI
       try:
-        ufr.enum_cards()
-        uid = ufr.list_cards()[0]
-        ufr.select_card(uid)
-        n = ufr.linear_read(uFRauthmode.T2T_NO_PWD_AUTH, 10, 150)
-        uri = list(ndef.message_decoder(n))[0].iri
+
+        # Enumerate the cards in the field
+        if not ufr.enum_cards():
+          continue
+
+        # Retrieve the list of UIDs enumerated
+        uids = ufr.list_cards()
+        if not uids:
+          continue
+
+        # Select the tag, read the memory zone where the NDEF should be,
+        # then deselect the tag (the tag's counter increments upon selecting)
+        ufr.select_card(uids[0])
+        ndef_mem_zone = ufr.linear_read(uFRauthMode.T2T_NO_PWD_AUTH, 10, 150)
         ufr.deselect_card()
-      except KeyboardInterrupt:
-        raise
-      except:
+
+        # Try to decode the NDEF
+        ndef_records = list(ndef.message_decoder(ndef_mem_zone))
+
+        # Do we have at least one NDEF record?
+        if not ndef_records:
+          continue
+
+        # Is the NDEF record a URI?
+        if not isinstance(ndef_records[0],ndef.uri.UriRecord):
+          continue
+
+        # Get the URI as a unicode string
+        uri = list(ndef.message_decoder(ndef_mem_zone))[0].iri
+
+      except (TimeoutError, uFRresponseError, ndef.record.DecodeError):
         continue
+
+      except KeyboardInterrupt:
+
+        # Do our own cleanup here instead of letting the class do it
+        # automatically, for the sake of example
+
+        print()
+        print("Interrupted: restoring and closing the reader")
+
+        ufr.flush()
+        ufr.close()
+
+        break
 
       # Process the URI
       m = re.findall("rfidtemperaturemonitoring\?n=([0-9]+)&d=([0-9]+)C&"
@@ -78,21 +120,4 @@ if __name__ == "__main__":
 
       sys.stdout.flush()
 
-  except KeyboardInterrupt:
-
-    t, v, tb = sys.exc_info()
-
-    # Return the reader to the default configuration
-    ufr.flush()
-
-    if ufr.get_anti_collision_status():
-      ufr.disable_anti_collision()	# re-enable polling
-
-    # Close the reader
-    ufr.close()
-
-    # Re-raise KeyboardInterrupt
-    six.reraise(t, v, tb)
-
-  except:
-    raise
+    print("Done")
