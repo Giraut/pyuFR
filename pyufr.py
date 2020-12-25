@@ -468,6 +468,35 @@ class uFRanswer:
 
 
 
+class uFRresponseError(Exception):
+  """Exception raised when receiving a malformed or unexpected response from
+     a uFR device
+  """
+
+  def __init__(self: uFRresponseError,
+		message: str = "") \
+		-> None:
+    """__init__ method
+    """
+    self.message = message
+    super().__init__(self.message)
+
+
+
+class uFRopenError(Exception):
+  """Exception raised when an error occurs opening a uFR device
+  """
+
+  def __init__(self: uFRopenError,
+		message: str = "") \
+		-> None:
+    """__init__ method
+    """
+    self.message = message
+    super().__init__(self.message)
+
+
+
 class uFR:
 
   def __init__(self: uFR) \
@@ -537,6 +566,11 @@ class uFR:
     http://<host>/uartX
     """
 
+    # Throw an exception if a device is already open
+    while self.serdev is not None or self.udpsock is not None or \
+		self.tcpsock is not None:
+      raise uFRopenError("device already open")
+
     # Find out the protocol and associated parameters
     proto: str
     p1: str
@@ -573,7 +607,7 @@ class uFR:
       self.resturl = p1
 
     else:
-      raise ValueError("unknown uFR device {}".format(dev))
+      raise uFRopenError("unknown uFR device {}".format(dev))
       return
 
     self.default_timeout = timeout
@@ -705,9 +739,9 @@ class uFR:
 			timeout = self.current_timeout).text.rstrip("\r\n\0 ")
       if not re.match("^([0-9a-zA-Z][0-9a-zA-Z])+$", resp):
         if not resp:
-          raise ValueError("empty HTTP POST response")
+          raise uFRresponseError("empty HTTP POST response")
         else:
-          raise ValueError("invalid HTTP POST response: {}".format(resp))
+          raise uFRresponseError("invalid HTTP POST response: {}".format(resp))
       data = bytes([int(resp[i:i+2], 16) for i in range(0, len(resp), 2)])
       self.postdata = ""
 
@@ -767,7 +801,7 @@ class uFR:
     answer: uFRanswer = self._get_answer(timeout)
 
     if not answer.is_ack or answer.code != cmd.value:
-      raise ValueError("expected ACK to {}, ext_len={}, "
+      raise uFRresponseError("expected ACK to {}, ext_len={}, "
 			"par0={:02x}h, par1={:02x}h - got {}".format(
 			cmd.name, ext_len, par0, par1, answer))
 
@@ -923,12 +957,12 @@ class uFR:
       return False
 
     # We got an expected byte
-    raise ValueError("expected {} ({:02x}h) or {} ({:02x}h) - got {:02x}h".
-			format(uFRcmdextpartack.ACK_PART.name,
-			uFRcmdextpartack.ACK_PART.value,
-			uFRcmdextpartack.ACK_LAST_PART.name,
-			uFRcmdextpartack.ACK_LAST_PART.value,
-			b))
+    raise uFRresponseError("expected {} ({:02x}h) or {} ({:02x}h) - "
+				"got {:02x}h".format(
+				uFRcmdextpartack.ACK_PART.name,
+				uFRcmdextpartack.ACK_PART.value,
+				uFRcmdextpartack.ACK_LAST_PART.name,
+				uFRcmdextpartack.ACK_LAST_PART.value, b))
 
 
 
@@ -941,8 +975,8 @@ class uFR:
 
     answer: uFRanswer = self._get_answer(timeout)
     if not answer.is_rsp or answer.code != self.last_cmd:
-      raise ValueError("expected response to {} - got {}".format(
-			self.last_cmd.name, answer))
+      raise uFRresponseError("expected response to {} - got {}".format(
+				self.last_cmd.name, answer))
     return answer
 
 
@@ -1218,7 +1252,7 @@ class uFR:
       if isinstance(key, int):
         par1 = key
       else:
-        raise ValueError("key should be an int")
+        raise TypeError("key should be an int")
       if length < 192 or not multiblock:
         cmdext.extend([length & 0xff, length >> 8])
       else:
@@ -1236,13 +1270,13 @@ class uFR:
 		isinstance(key, bytes):
         cmdext.extend(list(key))
       else:
-        raise ValueError("key be a tuple, list or bytes")
+        raise TypeError("key should be a tuple, list or bytes")
 
     elif authmode in (uFRauthmode.SAM_KEY_AUTH1A, uFRauthmode.SAM_KEY_AUTH1B):
       if isinstance(key, int):
         par1 = key
       else:
-        raise ValueError("key should be an int")
+        raise TypeError("key should be an int")
       if length < 192 or not multiblock:
         cmdext.extend([length & 0xff, length >> 8])
       else:
@@ -1255,13 +1289,13 @@ class uFR:
 		isinstance(key, bytes):
         cmdext.extend(list(key))
       else:
-        raise ValueError("key be a tuple, list or bytes")
+        raise TypeError("key should be a tuple, list or bytes")
 
     elif authmode in (uFRauthmode.MFP_RKA_AUTH1A, uFRauthmode.MFP_RKA_AUTH1B):
       if isinstance(key, int):
         par1 = key
       else:
-        raise ValueError("key should be an int")
+        raise TypeError("key should be an int")
       if length < 192 or not multiblock:
         cmdext.extend([length & 0xff, length >> 8])
       else:
@@ -1450,21 +1484,21 @@ class uFR:
     if ext_parts:
       while self._get_cmd_ext_part_ack(timeout):
         if not ext_parts:
-          raise ValueError("expected {} ({:02x}h) - got {} ({:02x}h) "
-			"with no more CMD_EXT parts to send".format(
-			uFRcmdextpartack.ACK_LAST_PART.name,
-			uFRcmdextpartack.ACK_LAST_PART.value,
-			uFRcmdextpartack.ACK_PART.name,
-			uFRcmdextpartack.ACK_PART.value))
+          raise uFRresponseError("expected {} ({:02x}h) - got {} ({:02x}h) with"
+					"no more CMD_EXT parts to send".format(
+					uFRcmdextpartack.ACK_LAST_PART.name,
+					uFRcmdextpartack.ACK_LAST_PART.value,
+					uFRcmdextpartack.ACK_PART.name,
+					uFRcmdextpartack.ACK_PART.value))
         self._send_data(ext_parts.pop(0))
 
     if ext_parts:
-      raise ValueError("expected {} ({:02x}h) - got {} ({:02x}h) "
-			"before sending the last CMD_EXT part".format(
-			uFRcmdextpartack.ACK_PART.name,
-			uFRcmdextpartack.ACK_PART.value,
-			uFRcmdextpartack.ACK_LAST_PART.name,
-			uFRcmdextpartack.ACK_LAST_PART.value))
+      raise uFRresponseError("expected {} ({:02x}h) - got {} ({:02x}h) "
+				"before sending the last CMD_EXT part".format(
+				uFRcmdextpartack.ACK_PART.name,
+				uFRcmdextpartack.ACK_PART.value,
+				uFRcmdextpartack.ACK_LAST_PART.name,
+				uFRcmdextpartack.ACK_LAST_PART.value))
 
     self._get_last_command_response(timeout)
     sleep(_post_write_emulation_ndef_wait)
