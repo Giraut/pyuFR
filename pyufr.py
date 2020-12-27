@@ -44,8 +44,8 @@ import socket
 import requests
 from time import sleep
 from enum import IntEnum
+import concurrent.futures
 from datetime import datetime
-from multiprocessing.pool import ThreadPool
 
 # Try to import optional modules but fail silently if they're not needed later
 try:
@@ -1945,11 +1945,12 @@ class uFR:
 
 
 
-  def _is_host_nano_online_threadpool_wrapper(self: uFR,
+  def _is_host_nano_online_thread_wrapper(self: uFR,
 					ht: Tuple[str, Optional[float]]) \
 					-> Tuple[str, bool]:
     """Wrapper to call is_host_nano_online() from a thread pool
     """
+
     return (ht[0], self.is_host_nano_online(ht[0], timeout = ht[1]))
 
 
@@ -1963,19 +1964,17 @@ class uFR:
 
     ip_net: ipaddress.IPv4Network = ipaddress.ip_network(netaddr)
 
-    t: ThreadPool = ThreadPool(processes = _subnet_probe_concurrent_connections)
+    with concurrent.futures.ProcessPoolExecutor(
+		max_workers =_subnet_probe_concurrent_connections) as executor:
 
-    nano_online_ips = []
-    for host, is_nano_online in t.map(
-			self._is_host_nano_online_threadpool_wrapper,
-			[(str(host), timeout) for host in ip_net.hosts()]):
-      if is_nano_online:
-        nano_online_ips.append(host)
+      futures = [executor.submit(self._is_host_nano_online_thread_wrapper,
+			(str(host), timeout)) for host in ip_net.hosts()]
 
-    t.close()
+      for future in concurrent.futures.as_completed(futures):
 
-    return nano_online_ips
-
+        host, is_nano_online = future.result()
+        if is_nano_online:
+          yield host
 
 
 
@@ -2062,7 +2061,8 @@ def __print_api_state_of_completion() \
 
 
 
-def __test_api(device: str) \
+def __test_api(device: Optional[str],
+		network: Optional[str]) \
 		-> None:
   """Test the API
   """
@@ -2077,16 +2077,25 @@ def __test_api(device: str) \
   # Network probing functions - the device doesn't need to be open for this
   if __test_network_probe_functions:
 
-    sys.stdout.write(pad("PROBE_SUBNET_NANO_ONLINES..."))
-    sys.stdout.flush()
-    nos: List[str] = ufr.probe_subnet_nano_onlines("192.168.1.0/24")
-    print("\r" + pad("PROBE_SUBNET_NANO_ONLINES:"), nos)
-    no: str
-    for no in nos:
-      print(pad("IS_HOST_NANO_ONLINE:"), ufr.is_host_nano_online(no))
+    if not network:
+      print("No network specified to test network probing!")
+      return
+
+    print("PROBE_SUBNET_NANO_ONLINES:")
+    host = None
+    for host in ufr.probe_subnet_nano_onlines(network):
+      print(host)
+    if host is not None:
+      print(pad("IS_HOST_NANO_ONLINE:"), ufr.is_host_nano_online(host))
+    else:
+      print("No Nano Online probed")
 
   # Open the device
-  ufrcomm = ufr.open(device)
+  if device:
+    ufrcomm = ufr.open(device)
+  else:
+    print("No uFR device specified to test communication!")
+    return
 
   # Reader information functions
   if __test_reader_info_functions:
@@ -2297,7 +2306,13 @@ if __name__ == "__main__":
   argparser: argparse.ArgumentParser = argparse.ArgumentParser()
   argparser.add_argument(
 	  "-d", "--device",
-	  help = "uFR device to test",
+	  help = "uFR device to test communication (e.g. serial:///dev/ttyUSB0"
+			":1000000)",
+	  type = str,
+	)
+  argparser.add_argument(
+	  "-n", "--network",
+	  help = "Network to test network probing (e.g. 192.168.1.0/24)",
 	  type = str,
 	)
   argparser.add_argument(
@@ -2313,4 +2328,4 @@ if __name__ == "__main__":
 
   # Test the API
   else:
-    __test_api(args.device)
+    __test_api(args.device, args.network)
