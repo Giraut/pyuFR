@@ -37,7 +37,8 @@ __test_tag_emulation                = True
 
 
 ### Modules
-from typing import Any, Type, List, Tuple, Dict, Callable, Union, Optional
+from typing import Any, Type, List, Tuple, Dict, Callable, Generator, \
+			Union, Optional
 from types import TracebackType
 import re
 import socket
@@ -1958,7 +1959,7 @@ class uFR:
   def probe_subnet_nano_onlines(self: uFR,
 				netaddr: str,
 				timeout: Optional[float] = None) \
-				-> list:
+				-> Generator:
     """Probe an entire subnet for Nano Onlines. Uses threads
     """
 

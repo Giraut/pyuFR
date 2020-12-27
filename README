@@ -42,143 +42,147 @@ ohttps://github.com/nfc-rfid-reader-sdk/ufr-doc/raw/master/uFR_COM_Protocol.pdf
 
 Current state of completion:
 
-UFR COM protocol command      Status
------------------------------------------------------------
-GET_READER_TYPE               Implemented
-GET_READER_SERIAL             Implemented
-GET_SERIAL_NUMBER             Implemented
-GET_HARDWARE_VERSION          Implemented
-GET_FIRMWARE_VERSION          Implemented
-GET_BUILD_NUMBER              Implemented
-READER_KEY_WRITE              Not implemented
-USER_DATA_READ                Not implemented
-USER_DATA_WRITE               Not implemented
-READER_KEYS_LOCK              Not implemented
-READER_KEYS_UNLOCK            Not implemented
-READER_PASSWORD_WRITE         Not implemented
-SELF_RESET                    Implemented
-SET_SPEED_PERMANENTLY         Not implemented
-GET_SPEED_PARAMETERS          Not implemented
-SET_UART_SPEED                Not implemented
-RED_LIGHT_CONTROL             Implemented
-USER_INTERFACE_SIGNAL         Implemented
-SET_RF_ANALOG_SETTINGS        Implemented
-GET_RF_ANALOG_SETTINGS        Implemented
-SET_LED_CONFIG                Implemented
-DEFAULT_UART_SPEED_SESSION    Not implemented
-GET_CARD_ID                   Implemented
-GET_CARD_ID_EX                Implemented
-GET_DLOGIC_CARD_TYPE          Implemented
-GET_LAST_CARD_ID_EX           Implemented
-SECTOR_TRAILER_WRITE          Not implemented
-SECTOR_TRAILER_WRITE_UNSAFE   Not implemented
-BLOCK_READ                    Not implemented
-BLOCK_WRITE                   Not implemented
-BLOCK_IN_SECTOR_READ          Not implemented
-BLOCK_IN_SECTOR_WRITE         Not implemented
-LINEAR_READ                   Implemented - partially tested
-LINEAR_WRITE                  Not implemented
-LINEAR_FORMAT_CARD            Not implemented
-LIN_ROW_READ                  Not implemented
-VALUE_BLOCK_READ              Not implemented
-VALUE_BLOCK_WRITE             Not implemented
-VALUE_BLOCK_INC               Not implemented
-VALUE_BLOCK_DEC               Not implemented
-VALUE_BLOCK_IN_SECTOR_READ    Not implemented
-VALUE_BLOCK_IN_SECTOR_WRITE   Not implemented
-VALUE_BLOCK_IN_SECTOR_INC     Not implemented
-VALUE_BLOCK_IN_SECTOR_DEC     Not implemented
-GET_DESFIRE_UID               Not implemented
-SET_DESFIRE_KEY               Not implemented
-DESFIRE_WRITE_TO_FILE         Not implemented
-DESFIRE_READ_FROM_FILE        Not implemented
-DESFIRE_CREATE_APPLICATION    Not implemented
-DESFIRE_CREATE_FILE           Not implemented
-DESFIRE_CREATE_AES_KEY        Not implemented
-DESFIRE_GET_KEY_CONFIG        Not implemented
-DESFIRE_CHANGE_KEY_CONFIG     Not implemented
-DESFIRE_DELETE_APPLICATION    Not implemented
-DESFIRE_DELETE_FILE           Not implemented
-DESFIRE_SET_CONFIGURATION     Not implemented
-DESFIRE_FORMAT_CARD           Not implemented
-DESFIRE_FREE_MEM              Not implemented
-DESFIRE_WRITE_AES_KEY         Not implemented
-DESFIRE_CREATE_VALUE_FILE     Not implemented
-DESFIRE_READ_VALUE_FILE       Not implemented
-DESFIRE_INCREASE_VALUE_FILE   Not implemented
-DESFIRE_DECREASE_VALUE_FILE   Not implemented
-DESFIRE_CREATE_RECORD_FILE    Not implemented
-DESFIRE_WRITE_RECORD          Not implemented
-DESFIRE_READ_RECORDS          Not implemented
-DESFIRE_CLEAR_RECORD          Not implemented
-DESFIRE_GET_APPLICATION_IDS   Not implemented
-MFP_FIRST_AUTHENTICATE        Not implemented
-MFP_CHANGE_REG_KEY            Not implemented
-MFP_GET_UID                   Not implemented
-GET_NFC_T2T_VERSION           Not implemented
-READ_COUNTER                  Not implemented
-INCREMENT_COUNTER             Not implemented
-NT4H_COMMON_CMD               Not implemented
-READ_ECC_SIGNATURE            Not implemented
-SET_CARD_ID_SEND_CONF         Not implemented
-GET_CARD_ID_SEND_CONF         Not implemented
-SET_BAD_SELECT_NR_MAX         Not implemented
-GET_BAD_SELECT_NR_MAX         Not implemented
-ENTER_SLEEP_MODE              Implemented
-LEAVE_SLEEP_MODE              Implemented
-AUTO_SLEEP_SET                Not implemented
-AUTO_SLEEP_GET                Not implemented
-WRITE_EMULATION_NDEF          Implemented
-TAG_EMULATION_START           Implemented
-TAG_EMULATION_STOP            Implemented
-AD_HOC_EMULATION_START        Implemented
-AD_HOC_EMULATION_STOP         Implemented
-GET_EXTERNAL_FIELD_STATE      Implemented
-GET_AD_HOC_EMULATION_PARAMS   Implemented
-SET_AD_HOC_EMULATION_PARAMS   Implemented
-SET_DISPLAY_DATA              Not implemented
-SET_SPEAKER_FREQUENCY         Implemented
-SET_DISPLAY_INTENSITY         Not implemented
-GET_DISPLAY_INTENSITY         Not implemented
-UFR_XRC_LOCK_OPEN             Not implemented
-UFR_XRC_SET_RELAY_STATE       Not implemented
-UFR_XRC_GET_IO_STATE          Not implemented
-ENTER_SHARE_RAM_COMM_MODE     Not implemented
-EXIT_SHARE_RAM_COMM_MODE      Not implemented
-READ_SHARE_RAM                Not implemented
-WRITE_SHARE_RAM               Not implemented
-I_BLOCK_TRANSCEIVE            Not implemented
-R_BLOCK_TRANSCEIVE            Not implemented
-S_BLOCK_DESELECT              Implemented - untested
-SET_ISO14443_4_MODE           Implemented
-APDU_TRANSCEIVE               Implemented - untested
-ENABLE_ANTI_COLLISION         Implemented
-DISABLE_ANTI_COLLISION        Implemented
-ENUM_CARDS                    Implemented
-LIST_CARDS                    Implemented
-SELECT_CARD                   Implemented
-DESELECT_CARD                 Implemented
-GET_ANTI_COLLISION_STATUS     Implemented
-ESP_SET_IO_STATE              Implemented
-ESP_GET_IO_STATE              Implemented
-ESP_READER_TIME_WRITE         Not implemented
-ESP_READER_TIME_READ          Not implemented
-ESP_READER_EEPROM_READ        Not implemented
-ESP_SET_DISPLAY_DATA          Implemented
-ESP_READER_RESET              Implemented
-ESP_READER_PASSWORD_WRITE     Not implemented
-ESP_READER_EEPROM_WRITE       Not implemented
-CHECK_UID_CHANGE              Implemented
-RF_RESET                      Implemented
-GET_READER_STATUS             Implemented
------------------------------------------------------------
+uFR COM protocol command      uFRcomm class method            Status
+----------------------------------------------------------------------------
+_UNDEFINED                    N/A                             Not implemented
+GET_READER_TYPE               get_reader_type()               Implemented
+GET_READER_SERIAL             get_reader_serial()             Implemented
+GET_SERIAL_NUMBER             get_serial_number()             Implemented
+GET_HARDWARE_VERSION          get_hardware_version()          Implemented
+GET_FIRMWARE_VERSION          get_firmware_version()          Implemented
+GET_BUILD_NUMBER              get_build_number()              Implemented
+READER_KEY_WRITE              N/A                             Not implemented
+USER_DATA_READ                N/A                             Not implemented
+USER_DATA_WRITE               N/A                             Not implemented
+READER_KEYS_LOCK              N/A                             Not implemented
+READER_KEYS_UNLOCK            N/A                             Not implemented
+READER_PASSWORD_WRITE         N/A                             Not implemented
+SELF_RESET                    self_reset()                    Implemented
+SET_SPEED_PERMANENTLY         N/A                             Not implemented
+GET_SPEED_PARAMETERS          N/A                             Not implemented
+SET_UART_SPEED                N/A                             Not implemented
+RED_LIGHT_CONTROL             red_light_control()             Implemented
+USER_INTERFACE_SIGNAL         user_interface_signal()         Implemented
+SET_RF_ANALOG_SETTINGS        set_rf_analog_settings()        Implemented
+GET_RF_ANALOG_SETTINGS        get_rf_analog_settings()        Implemented
+SET_LED_CONFIG                set_led_config()                Implemented
+DEFAULT_UART_SPEED_SESSION    N/A                             Not implemented
+GET_CARD_ID                   get_card_id()                   Implemented
+GET_CARD_ID_EX                get_card_id_ex()                Implemented
+GET_DLOGIC_CARD_TYPE          get_dlogic_card_type()          Implemented
+GET_LAST_CARD_ID_EX           get_last_card_id_ex()           Implemented
+SECTOR_TRAILER_WRITE          N/A                             Not implemented
+SECTOR_TRAILER_WRITE_UNSAFE   N/A                             Not implemented
+BLOCK_READ                    N/A                             Not implemented
+BLOCK_WRITE                   N/A                             Not implemented
+BLOCK_IN_SECTOR_READ          N/A                             Not implemented
+BLOCK_IN_SECTOR_WRITE         N/A                             Not implemented
+LINEAR_READ                   linear_read()                   Partially tested
+LINEAR_WRITE                  N/A                             Not implemented
+LINEAR_FORMAT_CARD            N/A                             Not implemented
+LIN_ROW_READ                  N/A                             Not implemented
+VALUE_BLOCK_READ              N/A                             Not implemented
+VALUE_BLOCK_WRITE             N/A                             Not implemented
+VALUE_BLOCK_INC               N/A                             Not implemented
+VALUE_BLOCK_DEC               N/A                             Not implemented
+VALUE_BLOCK_IN_SECTOR_READ    N/A                             Not implemented
+VALUE_BLOCK_IN_SECTOR_WRITE   N/A                             Not implemented
+VALUE_BLOCK_IN_SECTOR_INC     N/A                             Not implemented
+VALUE_BLOCK_IN_SECTOR_DEC     N/A                             Not implemented
+GET_DESFIRE_UID               N/A                             Not implemented
+SET_DESFIRE_KEY               N/A                             Not implemented
+DESFIRE_WRITE_TO_FILE         N/A                             Not implemented
+DESFIRE_READ_FROM_FILE        N/A                             Not implemented
+DESFIRE_CREATE_APPLICATION    N/A                             Not implemented
+DESFIRE_CREATE_FILE           N/A                             Not implemented
+DESFIRE_CREATE_AES_KEY        N/A                             Not implemented
+DESFIRE_GET_KEY_CONFIG        N/A                             Not implemented
+DESFIRE_CHANGE_KEY_CONFIG     N/A                             Not implemented
+DESFIRE_DELETE_APPLICATION    N/A                             Not implemented
+DESFIRE_DELETE_FILE           N/A                             Not implemented
+DESFIRE_SET_CONFIGURATION     N/A                             Not implemented
+DESFIRE_FORMAT_CARD           N/A                             Not implemented
+DESFIRE_FREE_MEM              N/A                             Not implemented
+DESFIRE_WRITE_AES_KEY         N/A                             Not implemented
+DESFIRE_CREATE_VALUE_FILE     N/A                             Not implemented
+DESFIRE_READ_VALUE_FILE       N/A                             Not implemented
+DESFIRE_INCREASE_VALUE_FILE   N/A                             Not implemented
+DESFIRE_DECREASE_VALUE_FILE   N/A                             Not implemented
+DESFIRE_CREATE_RECORD_FILE    N/A                             Not implemented
+DESFIRE_WRITE_RECORD          N/A                             Not implemented
+DESFIRE_READ_RECORDS          N/A                             Not implemented
+DESFIRE_CLEAR_RECORD          N/A                             Not implemented
+DESFIRE_GET_APPLICATION_IDS   N/A                             Not implemented
+MFP_FIRST_AUTHENTICATE        N/A                             Not implemented
+MFP_CHANGE_REG_KEY            N/A                             Not implemented
+MFP_GET_UID                   N/A                             Not implemented
+GET_NFC_T2T_VERSION           N/A                             Not implemented
+READ_COUNTER                  N/A                             Not implemented
+INCREMENT_COUNTER             N/A                             Not implemented
+NT4H_COMMON_CMD               N/A                             Not implemented
+READ_ECC_SIGNATURE            N/A                             Not implemented
+SET_CARD_ID_SEND_CONF         N/A                             Not implemented
+GET_CARD_ID_SEND_CONF         N/A                             Not implemented
+SET_BAD_SELECT_NR_MAX         N/A                             Not implemented
+GET_BAD_SELECT_NR_MAX         N/A                             Not implemented
+ENTER_SLEEP_MODE              enter_sleep_mode()              Implemented
+LEAVE_SLEEP_MODE              leave_sleep_mode()              Implemented
+AUTO_SLEEP_SET                N/A                             Not implemented
+AUTO_SLEEP_GET                N/A                             Not implemented
+WRITE_EMULATION_NDEF          write_emulation_ndef()          Implemented
+TAG_EMULATION_START           tag_emulation_start()           Implemented
+TAG_EMULATION_STOP            tag_emulation_stop()            Implemented
+AD_HOC_EMULATION_START        ad_hoc_emulation_start()        Implemented
+AD_HOC_EMULATION_STOP         ad_hoc_emulation_stop()         Implemented
+GET_EXTERNAL_FIELD_STATE      get_external_field_state()      Implemented
+GET_AD_HOC_EMULATION_PARAMS   get_ad_hoc_emulation_params()   Implemented
+SET_AD_HOC_EMULATION_PARAMS   set_ad_hoc_emulation_params()   Implemented
+SET_DISPLAY_DATA              N/A                             Not implemented
+SET_SPEAKER_FREQUENCY         set_speaker_frequency()         Implemented
+SET_DISPLAY_INTENSITY         N/A                             Not implemented
+GET_DISPLAY_INTENSITY         N/A                             Not implemented
+UFR_XRC_LOCK_OPEN             N/A                             Not implemented
+UFR_XRC_SET_RELAY_STATE       N/A                             Not implemented
+UFR_XRC_GET_IO_STATE          N/A                             Not implemented
+ENTER_SHARE_RAM_COMM_MODE     N/A                             Not implemented
+EXIT_SHARE_RAM_COMM_MODE      N/A                             Not implemented
+READ_SHARE_RAM                N/A                             Not implemented
+WRITE_SHARE_RAM               N/A                             Not implemented
+I_BLOCK_TRANSCEIVE            N/A                             Not implemented
+R_BLOCK_TRANSCEIVE            N/A                             Not implemented
+S_BLOCK_DESELECT              s_block_deselect()              Untested
+SET_ISO14443_4_MODE           set_iso14443_4_mode()           Implemented
+APDU_TRANSCEIVE               apdu_transceive()               Untested
+ENABLE_ANTI_COLLISION         enable_anti_collision()         Implemented
+DISABLE_ANTI_COLLISION        disable_anti_collision()        Implemented
+ENUM_CARDS                    enum_cards()                    Implemented
+LIST_CARDS                    list_cards()                    Implemented
+SELECT_CARD                   select_card()                   Implemented
+DESELECT_CARD                 deselect_card()                 Implemented
+GET_ANTI_COLLISION_STATUS     get_anti_collision_status()     Implemented
+ESP_SET_IO_STATE              esp_set_io_state()              Implemented
+ESP_GET_IO_STATE              esp_get_io_state()              Implemented
+ESP_READER_TIME_WRITE         N/A                             Not implemented
+ESP_READER_TIME_READ          N/A                             Not implemented
+ESP_READER_EEPROM_READ        N/A                             Not implemented
+ESP_SET_DISPLAY_DATA          esp_set_display_data()          Implemented
+ESP_READER_RESET              esp_reader_reset()              Implemented
+ESP_READER_PASSWORD_WRITE     N/A                             Not implemented
+ESP_READER_EEPROM_WRITE       N/A                             Not implemented
+CHECK_UID_CHANGE              check_uid_change()              Implemented
+RF_RESET                      rf_reset()                      Implemented
+GET_READER_STATUS             get_reader_status()             Implemented
+----------------------------------------------------------------------------
 State of completion:          35%
 
-Class-specific API functions
------------------------------------------------------------
-open()
+uFRcomm class-specific methods
+----------------------------------------------------------------------------
 close()
 flush()
+
+uFR class methods
+----------------------------------------------------------------------------
+open()
 is_host_nano_online()
 probe_subnet_nano_onlines()
 
