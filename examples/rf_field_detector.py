@@ -11,7 +11,7 @@ import argparse
 from datetime import datetime
 
 sys.path.append("..")
-from pyufr import uFR, uFRemuMode
+from pyufr import uFRcomm, uFRemuMode
 
 
 
@@ -30,7 +30,7 @@ if __name__ == "__main__":
 
   # Open the reader (assert restore_on_close so the reader is automatically
   # restored to the state we found it in upon closing)
-  with uFR(args.device, restore_on_close = True) as ufr:
+  with uFRcomm(args.device, restore_on_close = True) as ufr:
 
     # Unconditionally exit any emulation mode the reader might be in, otherwise
     # it won't accept the reset and anti-collision commands

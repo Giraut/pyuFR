@@ -29,7 +29,7 @@ if __name__ == "__main__":
 
   # Open the reader (assert restore_on_close so the reader is automatically
   # restored to the state we found it in upon closing)
-  with uFR(args.device, restore_on_close = True) as ufr:
+  with uFR.open(args.device, restore_on_close = True) as ufr:
 
     # Unconditionally exit any emulation mode the reader might be in, otherwise
     # it won't accept the reset and anti-collision commands
