@@ -4,11 +4,8 @@ using the HTTP protocol. Transparent mode must be enabled in the readers.
 """
 
 ### Modules
-import re
 import sys
-import ndef
 import argparse
-from datetime import datetime
 
 sys.path.append("..")
 from pyufr import uFR, uFRemuMode
