@@ -19,7 +19,7 @@ _post_emulation_start_stop_wait: float    = .1 #s
 _subnet_probe_concurrent_connections: int = 100
 
 # API tests
-__test_network_probe_functions      = False
+__test_network_probe_functions      = True
 __test_eeprom_writing_functions     = False
 __test_reader_info_functions        = True
 __test_ad_hoc_functions             = True
@@ -2033,6 +2033,9 @@ class uFR:
 
       udpsock.settimeout(.1)	# Very short timeout for sending to begin with
 
+      # Increase the socket send buffer to ping an entire /24 subnet in one go
+      udpsock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 2000000)
+
       # Get the first host in the subnet
       addr_generator: Generator = ipaddress.ip_network(netaddr).hosts()
       next_addr: str = str(next(addr_generator, ""))
@@ -2047,9 +2050,10 @@ class uFR:
       while True:
 
         # Send as many UDP packets as we can then switch to listening to
-        # responses back if we time out before reaching the end of the list of
-        # hosts to contact. If we've sent all the UDP packets we have to send,
-        # switch to the long timeout for the final round of reception
+        # responses back if we fill up the send buffer before reaching the end
+        # of the list of hosts to ping. If we've sent all the UDP packets we
+        # have to send, switch to the normal timeout for the final round of
+        # listening
         while next_addr:
 
           try:
@@ -2178,24 +2182,24 @@ def __test_api(device: Optional[str],
   if __test_network_probe_functions:
 
     if not network:
-      print("No network specified to test network probing!")
-      return
+      print("No network specified to test network probing")
 
-    print("NANO_ONLINE_SUBNET_DISCOVERY:")
-    discovery_response: Optional[uFRdiscoveryResponse] = None
-    for discovery_response in ufr.nano_online_subnet_discovery(network):
-      print(discovery_response)
-    if discovery_response is not None:
-      print(pad("NANO_ONLINE_HOST_DISCOVERY:"),
-			ufr.nano_online_host_discovery(discovery_response.ip))
     else:
-      print("No uFR Nano Onlinei reader discovered")
+      print("NANO_ONLINE_SUBNET_DISCOVERY:")
+      discovery_response: Optional[uFRdiscoveryResponse] = None
+      for discovery_response in ufr.nano_online_subnet_discovery(network):
+        print(discovery_response)
+      if discovery_response is not None:
+        print(pad("NANO_ONLINE_HOST_DISCOVERY:"),
+			ufr.nano_online_host_discovery(discovery_response.ip))
+      else:
+        print("No uFR Nano Onlinei reader discovered")
 
   # Open the device
   if device:
     ufrcomm = ufr.open(device)
   else:
-    print("No uFR device specified to test communication!")
+    print("No uFR device specified to test communication")
     return
 
   # Reader information functions
