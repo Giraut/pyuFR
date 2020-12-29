@@ -45,7 +45,6 @@ import socket
 import requests
 from time import sleep
 from enum import IntEnum
-import concurrent.futures
 from datetime import datetime
 
 # Try to import optional modules but fail silently if they're not needed later
@@ -395,6 +394,8 @@ class uFRPCDMgrState(IntEnum):
 
 ### Classes
 class uFRanswer:
+  """uFR command answer
+  """
 
   def __init__(self: uFRanswer) \
 		-> None:
@@ -508,6 +509,56 @@ class uFRIOError(Exception):
 
 
 
+class uFRdiscoveryResponse:
+  """uFR Nano Online UDP discovery server response
+  """
+
+  class uart:
+    port: int = 0
+    is_udp: bool = False
+    baudrate: int = 0
+
+  # Variables
+  ip: str = ""
+  uart1: uart = uart()
+  uart2: uart = uart()
+  serial: Optional[str] = None
+
+
+
+  def __init__(self,
+		dgram: bytes) \
+		-> None:
+    """Extract values from a UDP discovery response datagram
+    """
+    self.ip = ".".join([str(b) for b in dgram[:4]])
+    self.uart1.port = dgram[4] + (dgram[5] << 8)
+    self.uart1.is_udp = (dgram[6] == ord("U"))
+    self.uart1.baudrate = dgram[7] + (dgram[8] << 8) + \
+				(dgram[9] << 16) + (dgram[10] << 24)
+    self.uart2.port = dgram[11] + (dgram[12] << 8)
+    self.uart2.is_udp = (dgram[13] == ord("U"))
+    self.uart2.baudrate = dgram[14] + (dgram[15] << 8) + \
+				(dgram[16] << 16) + (dgram[17] << 24)
+    if len(dgram) > 20 and dgram[18] == 0x0b and dgram[-1] == 0:
+      self.serial = dgram[19:-1].decode("ascii")
+
+
+
+  def __repr__(self: uFRanswer) \
+		-> str:
+    """Return a one-line human-readable description of the discovery response
+    """
+
+    return("IP={}, uart1.port={}, uart1.is_udp={}, uart1.baudrate={}, "
+		"uart2.port={}, uart2.is_udp={}, uart2.baudrate={}, "
+		"serial={}".format(self.ip,
+		self.uart1.port, self.uart1.is_udp, self.uart1.baudrate,
+		self.uart2.port, self.uart2.is_udp, self.uart2.baudrate,
+		self.serial))
+
+
+
 class uFRcomm:
 
   def __init__(self: uFRcomm,
@@ -515,7 +566,7 @@ class uFRcomm:
 		restore_on_close: bool = False,
 		timeout: float = _default_ufr_timeout) \
 		-> None:
-    """__init__ 
+    """__init__
     Open a connection. The device format is one of:
 
     serial://<device file>:<baudrate>
@@ -728,6 +779,9 @@ class uFRcomm:
       raise uFRIOError("device not open")
 
     data: bytes
+    ip: str
+    reset_timeout: bool
+    timeout_tstamp: float
 
     # Change the timeout as needed
     if timeout is None:
@@ -753,10 +807,10 @@ class uFRcomm:
       data = b""
       while not data:
         try:
-          data, fromhostport = self.udpsock.recvfrom(1024)
+          data, (ip, _) = self.udpsock.recvfrom(1024)
         except socket.timeout:
           raise TimeoutError
-        if fromhostport[0] != self.udphost:
+        if ip != self.udphost:
           data = b""
         if not data and datetime.now().timestamp() >= timeout_tstamp:
           raise TimeoutError
@@ -1927,55 +1981,100 @@ class uFR:
 
 
 
-  def is_host_nano_online(self: uFR,
-				host: str,
-				timeout: Optional[float] = None) \
-				-> bool:
-    """Try to contact a host to see if it's running a HTTP server serving a
-    Nano online page
+  def nano_online_host_discovery(self: uFR,
+					hostaddr: str,
+					timeout: float = _default_ufr_timeout) \
+					-> uFRdiscoveryResponse:
+    """Try to send a UDP packet to a single host on port 8880 / UDP and return
+    the discovery response or None
     """
 
-    # Try to get the Nano Online's login page
-    try:
-      response = requests.get("http://" + host, timeout = \
-			_default_ufr_timeout if timeout is None else timeout)
-      return response.status_code == 200 and \
-		re.search("uFR login", response.text) is not None
-    except:
-      return False
+    hostaddr = socket.gethostbyname(hostaddr)
+
+    # Set up the UDP socket
+    udpsock: socket.socket
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udpsock:
+
+      udpsock.settimeout(timeout)
+
+      # Send the host a UDP datagram on port 8880
+      udpsock.sendto(b"\n", (hostaddr, 8880))
+
+      # Wait for a UDP datagram back from that host and only keep if if it's a
+      # valid response
+      data: bytes
+      ip: str
+
+      try:
+        data, (ip, _) = udpsock.recvfrom(1024)
+      except socket.timeout:
+        return None
+
+      if len(data) >= 18 and ".".join([str(b) for b in data[:4]]) == ip and \
+		data[6] in (b"TU") and data[13] in (b"TU") and ip == hostaddr:
+
+          return uFRdiscoveryResponse(data)
 
 
 
-  def _is_host_nano_online_thread_wrapper(self: uFR,
-					ht: Tuple[str, Optional[float]]) \
-					-> Tuple[str, bool]:
-    """Wrapper to call is_host_nano_online() from a thread pool
-    """
-
-    return (ht[0], self.is_host_nano_online(ht[0], timeout = ht[1]))
-
-
-
-  def probe_subnet_nano_onlines(self: uFR,
-				netaddr: str,
-				timeout: Optional[float] = None) \
-				-> Generator:
-    """Probe an entire subnet for Nano Onlines. Uses threads
+  def nano_online_subnet_discovery(self: uFR,
+					netaddr: str,
+					timeout: float = _default_ufr_timeout) \
+					-> Generator:
+    """Try to send a UDP packet to all the hosts on a subnet on port 8880 / UDP
+    and return which ones respond with a UDP discovery response datagram
     """
 
     ip_net: ipaddress.IPv4Network = ipaddress.ip_network(netaddr)
 
-    with concurrent.futures.ProcessPoolExecutor(
-		max_workers =_subnet_probe_concurrent_connections) as executor:
+    # Set up the UDP socket
+    udpsock: socket.socket
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udpsock:
 
-      futures = [executor.submit(self._is_host_nano_online_thread_wrapper,
-			(str(host), timeout)) for host in ip_net.hosts()]
+      udpsock.settimeout(.1)	# Very short timeout for sending to begin with
 
-      for future in concurrent.futures.as_completed(futures):
+      # Get the first host in the subnet
+      addr_generator: Generator = ipaddress.ip_network(netaddr).hosts()
+      next_addr: str = str(next(addr_generator, ""))
+      if not next_addr:
+        return
 
-        host, is_nano_online = future.result()
-        if is_nano_online:
-          yield host
+      # Send probe databrams, get UDP datagrams back and only keep valid
+      # responses from hosts we've interested in
+      data: bytes
+      ip: str
+
+      while True:
+
+        # Send as many UDP packets as we can then switch to listening to
+        # responses back if we time out before reaching the end of the list of
+        # hosts to contact. If we've sent all the UDP packets we have to send,
+        # switch to the long timeout for the final round of reception
+        while next_addr:
+
+          try:
+            udpsock.sendto(b"\n", (next_addr, 8880))
+            next_addr = str(next(addr_generator, ""))
+          except socket.timeout:
+            break
+
+          if not next_addr:
+            udpsock.settimeout(timeout)
+
+        # Try to get responses back
+        try:
+          data, (ip, _) = udpsock.recvfrom(1024)
+        except socket.timeout:
+          if next_addr:
+            continue
+          else:
+            break
+
+        if len(data) >= 18 and ".".join([str(b) for b in data[:4]]) == ip and \
+		data[6] in (b"TU") and data[13] in (b"TU") and \
+		ipaddress.IPv4Address(ip) in ip_net:
+
+          yield uFRdiscoveryResponse(data)
 
 
 
@@ -2082,14 +2181,15 @@ def __test_api(device: Optional[str],
       print("No network specified to test network probing!")
       return
 
-    print("PROBE_SUBNET_NANO_ONLINES:")
-    host = None
-    for host in ufr.probe_subnet_nano_onlines(network):
-      print(host)
-    if host is not None:
-      print(pad("IS_HOST_NANO_ONLINE:"), ufr.is_host_nano_online(host))
+    print("NANO_ONLINE_SUBNET_DISCOVERY:")
+    discovery_response: Optional[uFRdiscoveryResponse] = None
+    for discovery_response in ufr.nano_online_subnet_discovery(network):
+      print(discovery_response)
+    if discovery_response is not None:
+      print(pad("NANO_ONLINE_HOST_DISCOVERY:"),
+			ufr.nano_online_host_discovery(discovery_response.ip))
     else:
-      print("No Nano Online probed")
+      print("No uFR Nano Onlinei reader discovered")
 
   # Open the device
   if device:

@@ -1,6 +1,6 @@
 #!/usr/bin/python3
-"""Scan a local network for Nano Online readers and get their serial numbers
-using the HTTP protocol. Transparent mode must be enabled in the readers.
+"""Scan a local network for uFR Nano Online readers, get their serial numbers
+and make then beep and flash the LEDs. The readers must be in slave mode.
 """
 
 ### Modules
@@ -8,7 +8,7 @@ import sys
 import argparse
 
 sys.path.append("..")
-from pyufr import uFR, uFRemuMode
+from pyufr import uFR, uFRlightSignal, uFRbeepSignal
 
 
 
@@ -28,21 +28,27 @@ if __name__ == "__main__":
   ufr = uFR()
 
   # Probe the network for Nano Online devices
-  for ip in ufr.probe_subnet_nano_onlines(args.network):
+  for response in ufr.nano_online_subnet_discovery(args.network):
 
-    sys.stdout.write("IP={}, serial=".format(ip))
+    sys.stdout.write("IP={}, serial=".format(response.ip))
 
     # Open the reader, try the uart1 reader first
-    with ufr.open("http://" + ip + "/uart1") as ufrcomm:
+    with ufr.open("{}://{}:{}".format("udp" if response.uart1.is_udp else "tcp",
+				response.ip, response.uart1.port)) as ufrcomm:
       try:
         sys.stdout.write(ufrcomm.get_serial_number() + "\n")
+        ufrcomm.user_interface_signal(uFRlightSignal.ALTERNATION,
+					uFRbeepSignal.SHORT)
         continue
       except:
         pass
 
     # Open the reader again, try the uart2 reader next
-    with ufr.open("http://" + ip + "/uart2") as ufrcomm:
+    with ufr.open("{}://{}:{}".format("udp" if response.uart2.is_udp else "tcp",
+				response.ip, response.uart2.port)) as ufrcomm:
       try:
         sys.stdout.write(ufrcomm.get_serial_number() + "\n")
+        ufrcomm.user_interface_signal(uFRlightSignal.ALTERNATION,
+					uFRbeepSignal.SHORT)
       except:
         sys.stdout.write("?\n")

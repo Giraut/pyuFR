@@ -183,8 +183,8 @@ flush()
 uFR class methods
 ----------------------------------------------------------------------------
 open()
-is_host_nano_online()
-probe_subnet_nano_onlines()
+nano_online_host_discovery()
+nano_online_subnet_discovery()
 
 
 
