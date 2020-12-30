@@ -551,7 +551,7 @@ class uFRdiscoveryResponse:
     """Return a one-line human-readable description of the discovery response
     """
 
-    return("IP={}, uart1.port={}, uart1.is_udp={}, uart1.baudrate={}, "
+    return("ip={}, uart1.port={}, uart1.is_udp={}, uart1.baudrate={}, "
 		"uart2.port={}, uart2.is_udp={}, uart2.baudrate={}, "
 		"serial={}".format(self.ip,
 		self.uart1.port, self.uart1.is_udp, self.uart1.baudrate,
@@ -652,28 +652,22 @@ class uFRcomm:
         proto = ""
 
     # Open the device
-    device_handle: Union[serial.Serial, socket.socket, str]
-
     if proto == "serial":
       self.serdev = serial.Serial(p1, int(p2), timeout = timeout)
-      device_handle = self.serdev
 
     elif proto == "udp":
       self.udpsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
       self.udpsock.settimeout(timeout)
       self.udphost = socket.gethostbyname(p1)
       self.udpport = int(p2)
-      device_handle = self.udpsock
 
     elif proto == "tcp":
       self.tcpsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
       self.tcpsock.settimeout(timeout)
       self.tcpsock.connect((socket.gethostbyname(p1), int(p2)))
-      device_handle = self.tcpsock
 
     elif proto == "http":
       self.resturl = p1
-      device_handle = self.resturl
 
     else:
       raise uFRopenError("unknown uFR device {}".format(dev))
