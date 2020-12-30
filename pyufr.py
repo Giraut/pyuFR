@@ -2194,7 +2194,7 @@ def __test_api(device: Optional[str],
         print(pad("NANO_ONLINE_HOST_DISCOVERY:"),
 			ufr.nano_online_host_discovery(discovery_response.ip))
       else:
-        print("No uFR Nano Onlinei reader discovered")
+        print("No uFR Nano Online reader discovered")
 
   # Open the device
   if device:
