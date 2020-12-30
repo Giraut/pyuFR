@@ -529,7 +529,8 @@ class uFRdiscoveryResponse:
   def __init__(self,
 		dgram: bytes) \
 		-> None:
-    """Extract values from a UDP discovery response datagram
+    """__init__ method
+    Extract values from a UDP discovery response datagram
     """
     self.ip = ".".join([str(b) for b in dgram[:4]])
     self.uart1.port = dgram[4] + (dgram[5] << 8)
@@ -584,9 +585,9 @@ class uFRcomm:
 
     ### Constants
     # Reverse lookup tables
-    self.__UFR_HEADER_VALS: Tuple[int, ...]  = tuple(map(int, uFRhead))
-    self.__UFR_CMD_VALS: Tuple[int, ...]     = tuple(map(int, uFRcmd))
-    self.__UFR_ERR_VALS: Tuple[int, ...]     = tuple(map(int, uFRerr))
+    self.__UFR_HEADER_VALS: Tuple[int, ...] = tuple(map(int, uFRhead))
+    self.__UFR_CMD_VALS: Tuple[int, ...] = tuple(map(int, uFRcmd))
+    self.__UFR_ERR_VALS: Tuple[int, ...] = tuple(map(int, uFRerr))
     self.__UFR_VAL_TO_CARD_TYPE: Dict[int, uFRcardType] = \
 			{ct.value: ct for ct in uFRcardType}
     self.__UFR_VAL_TO_DL_CARD_TYPE: Dict[int, uFRDLCardType] = \
@@ -605,8 +606,8 @@ class uFRcomm:
 			{iostate.value: iostate for iostate in uFRIOState}
 
     # Leave sleep mode parameters
-    self.__WAKE_UP_BYTE: int                        = 0x00
-    self.__WAKE_UP_WAIT: float                      = .01 #s
+    self.__WAKE_UP_BYTE: int = 0x00
+    self.__WAKE_UP_WAIT: float = .01 #s
 
     ### Variables
     self.serdev: Optional[serial.Serial] = None
