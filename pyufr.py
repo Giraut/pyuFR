@@ -526,12 +526,16 @@ class uFRdiscoveryResponse:
 
 
 
-  def __init__(self,
+  def __init__(self: uFRdiscoveryResponse,
 		dgram: bytes) \
 		-> None:
     """__init__ method
     Extract values from a UDP discovery response datagram
     """
+
+    if len(dgram) < 18 or dgram[6] not in (b"TU") or dgram[13] not in (b"TU"):
+      raise ValueError("invalid UDP discovery datagram")
+
     self.ip = ".".join([str(b) for b in dgram[:4]])
     self.uart1.port = dgram[4] + (dgram[5] << 8)
     self.uart1.is_udp = (dgram[6] == ord("U"))
@@ -546,17 +550,17 @@ class uFRdiscoveryResponse:
 
 
 
-  def __repr__(self: uFRanswer) \
+  def __repr__(self: uFRdiscoveryResponse) \
 		-> str:
     """Return a one-line human-readable description of the discovery response
     """
 
-    return("ip={}, uart1.port={}, uart1.is_udp={}, uart1.baudrate={}, "
-		"uart2.port={}, uart2.is_udp={}, uart2.baudrate={}, "
+    return "ip={}, uart1.port={}, uart1.is_udp={}, uart1.baudrate={}, " \
+		"uart2.port={}, uart2.is_udp={}, uart2.baudrate={}, " \
 		"serial={}".format(self.ip,
 		self.uart1.port, self.uart1.is_udp, self.uart1.baudrate,
 		self.uart2.port, self.uart2.is_udp, self.uart2.baudrate,
-		self.serial))
+		self.serial)
 
 
 
@@ -719,6 +723,7 @@ class uFRcomm:
 			-> str:
     """Convert bytes or a list of integers into a human-readable UID
     """
+
     return ":".join(["{:02X}".format(b) for b in bytesuid])
 
 
@@ -728,6 +733,7 @@ class uFRcomm:
 			-> bytes:
     """Convert a human-readable UID into bytes
     """
+
     return bytes([int(v, 16) for v in struid.split(":")])
 
 
@@ -1169,6 +1175,7 @@ class uFRcomm:
 		-> uFRcomm:
     """__enter__ method
     """
+
     return self
 
 
@@ -1979,7 +1986,7 @@ class uFR:
   def nano_online_host_discovery(self: uFR,
 					hostaddr: str,
 					timeout: float = _default_ufr_timeout) \
-					-> uFRdiscoveryResponse:
+					-> Optional[uFRdiscoveryResponse]:
     """Try to send a UDP packet to a single host on port 8880 / UDP and return
     the discovery response or None
     """
@@ -1993,22 +2000,30 @@ class uFR:
       udpsock.settimeout(timeout)
 
       # Send the host a UDP datagram on port 8880
-      udpsock.sendto(b"\n", (hostaddr, 8880))
+      udpsock.sendto(b"", (hostaddr, 8880))
 
-      # Wait for a UDP datagram back from that host and only keep if if it's a
-      # valid response
+      # Wait for a UDP datagram back and only keep it if it's a valid response
+      # from that host
       data: bytes
       ip: str
-
       try:
         data, (ip, _) = udpsock.recvfrom(1024)
       except socket.timeout:
         return None
 
-      if len(data) >= 18 and ".".join([str(b) for b in data[:4]]) == ip and \
-		data[6] in (b"TU") and data[13] in (b"TU") and ip == hostaddr:
+      if ip != hostaddr:
+        return None
 
-          return uFRdiscoveryResponse(data)
+      try:
+        response: uFRdiscoveryResponse = uFRdiscoveryResponse(data)
+      except:
+        return None
+
+      if response.ip != ip:
+        del(response)
+        return None
+
+      return uFRdiscoveryResponse(data)
 
 
 
@@ -2052,7 +2067,7 @@ class uFR:
         while next_addr:
 
           try:
-            udpsock.sendto(b"\n", (next_addr, 8880))
+            udpsock.sendto(b"", (next_addr, 8880))
             next_addr = str(next(addr_generator, ""))
           except socket.timeout:
             break
@@ -2060,7 +2075,8 @@ class uFR:
           if not next_addr:
             udpsock.settimeout(timeout)
 
-        # Try to get responses back
+        # Wait for a UDP datagram back and only yield it if it's a valid
+        # response from a host in the subnet
         try:
           data, (ip, _) = udpsock.recvfrom(1024)
         except socket.timeout:
@@ -2069,11 +2085,19 @@ class uFR:
           else:
             break
 
-        if len(data) >= 18 and ".".join([str(b) for b in data[:4]]) == ip and \
-		data[6] in (b"TU") and data[13] in (b"TU") and \
-		ipaddress.IPv4Address(ip) in ip_net:
+        if ipaddress.IPv4Address(ip) not in ip_net:
+          continue
 
-          yield uFRdiscoveryResponse(data)
+        try:
+          response: uFRdiscoveryResponse = uFRdiscoveryResponse(data)
+        except:
+          continue
+
+        if response.ip != ip:
+          del(response)
+          continue
+
+        yield response
 
 
 
@@ -2389,9 +2413,6 @@ def __test_api(device: Optional[str],
 
   # Close the device
   ufrcomm.close()
-
-  # Delete the uFRcomm object
-  del(ufr)
 
 
 
