@@ -7,7 +7,7 @@
 This is a Python class to communicate with Digital Logic uFR-series NFC readers
 such as the uFR Nano or Nano Online (https://www.d-logic.net/).
 
-Communication options include serial, UDP, TCP and HTTP POST (REST).
+Communication options include serial, UDP, TCP, websocket and HTTP POST (REST).
 
 See test routine at the bottom of the class for usage examples.
 

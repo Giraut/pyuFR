@@ -53,6 +53,10 @@ try:
 except:
   pass
 try:
+  import websocket						# type: ignore
+except:
+  pass
+try:
   import ipaddress
 except:
   pass
@@ -577,6 +581,7 @@ class uFRcomm:
     serial://<device file>:<baudrate>
     udp://<host>:<port>
     tcp://<host>:<port>
+    ws://<host>:<port>
     http://<host>/uartX
 
     examples:
@@ -584,6 +589,7 @@ class uFRcomm:
     serial:///dev/ttyUSB0:1000000		# Nano USB serial
     udp://192.168.1.123:8881			# Nano Online slave UDP
     tcp://192.168.1.123:8881			# Nano Online slave TCP
+    ws://192.168.1.123:8881			# Nano Online slave websocket
     http://ufr.localnet.org/uart1"		# Nano Online REST UART1
     """
 
@@ -622,6 +628,8 @@ class uFRcomm:
 
     self.tcpsock: Optional[socket.socket] = None
 
+    self.websock: Optional[websocket] = None
+
     self.resturl: Optional[str] = None
     self.postdata: str = ""
 
@@ -644,7 +652,7 @@ class uFRcomm:
     p2: str
     m: Optional[List]
 
-    m = re.findall("^(serial|udp|tcp)://(.+):([0-9]+)/*$", dev)
+    m = re.findall("^(serial|udp|tcp|ws)://(.+):([0-9]+)/*$", dev)
     if m:
       proto, p1, p2 = m[0]
     else:
@@ -670,6 +678,10 @@ class uFRcomm:
       self.tcpsock.settimeout(timeout)
       self.tcpsock.connect((socket.gethostbyname(p1), int(p2)))
 
+    elif proto == "ws":
+      self.websock = websocket.create_connection("ws://{}:{}".format(p1, p2))
+      self.websock.settimeout(timeout)
+
     elif proto == "http":
       self.resturl = p1
 
@@ -694,7 +706,7 @@ class uFRcomm:
     """
 
     while self.serdev is not None or self.udpsock is not None or \
-		self.tcpsock is not None:
+		self.tcpsock is not None or self.websock is not None:
       try:
         self._get_data(timeout = timeout)
       except TimeoutError:
@@ -745,8 +757,8 @@ class uFRcomm:
     """
 
     # Throw an exception if a device is not open
-    if self.serdev is None and self.udpsock is None and \
-		self.tcpsock is None and self.resturl is None:
+    if self.serdev is None and self.udpsock is None and self.tcpsock is None \
+		and self.websock is None and self.resturl is None:
       raise uFRIOError("device not open")
 
     # Send to a serial device
@@ -762,6 +774,10 @@ class uFRcomm:
     elif self.tcpsock is not None:
       self.tcpsock.sendall(bytes(data))
 
+    # Send to a websocket host
+    elif self.websock is not None:
+      self.websock.send_binary(bytes(data))
+
     # "Send" to a HTTP server
     elif self.resturl is not None:
       self.postdata = "".join(["{:02X}".format(b) for b in data])
@@ -775,8 +791,8 @@ class uFRcomm:
     """
 
     # Throw an exception if a device is not open
-    if self.serdev is None and self.udpsock is None and \
-		self.tcpsock is None and self.resturl is None:
+    if self.serdev is None and self.udpsock is None and self.tcpsock is None \
+		and self.websock is None and self.resturl is None:
       raise uFRIOError("device not open")
 
     data: bytes
@@ -824,6 +840,20 @@ class uFRcomm:
         data = self.tcpsock.recv(1024)
       except socket.timeout:
         raise TimeoutError
+
+    # Receive from a websocket host
+    elif self.websock is not None:
+      if reset_timeout:
+        self.websock.settimeout(self.current_timeout)
+      try:
+        wsframe: websocket.ABNF = self.websock.recv_frame()
+      except websocket._exceptions.WebSocketTimeoutException as e:
+        if str(e)== "timed out":
+          raise TimeoutError
+        raise
+      if wsframe.opcode != websocket.ABNF.OPCODE_BINARY:
+        raise uFRresponseError("websocket response is not binary")
+      data = wsframe.data
 
     # Receive a POST reply from a HTTP server
     elif self.resturl is not None:
@@ -1140,7 +1170,8 @@ class uFRcomm:
     """
 
     if restore and self.serdev is not None or self.udpsock is not None or \
-		self.tcpsock is not None or self.resturl is not None:
+		self.tcpsock is not None or self.websock is not None or \
+		self.resturl is not None:
       self._restore_reader(timeout = timeout)
 
     if self.serdev is not None:
@@ -1156,6 +1187,10 @@ class uFRcomm:
     if self.tcpsock is not None:
       self.tcpsock.close()
       self.tcpsock = None
+
+    if self.websock is not None:
+      self.websock.close()
+      self.websock = None
 
     self.resturl = None
     self.postdata = ""
@@ -2274,7 +2309,8 @@ def __test_api(device: Optional[str],
     # Only test the ESP reset function if the device is a Nano Online connected
     # through the network, but not in HTTP transparent mode, as transparent
     # mode bypasses the ESP and sends the commands directly to the UART
-    if ufrcomm.udpsock is not None or ufrcomm.tcpsock is not None:
+    if ufrcomm.udpsock is not None or ufrcomm.tcpsock is not None or \
+		ufrcomm.websock is not None:
 
       print("ESP_READER_RESET")
       ufrcomm.esp_reader_reset()
@@ -2316,7 +2352,8 @@ def __test_api(device: Optional[str],
     # Only test the ESP LED function if the device is a Nano Online connected
     # through the network, but not in HTTP transparent mode, as transparent
     # mode bypasses the ESP and sends the commands directly to the UART
-    if ufrcomm.udpsock is not None or ufrcomm.tcpsock is not None:
+    if ufrcomm.udpsock is not None or ufrcomm.tcpsock is not None or \
+		ufrcomm.websock is not None:
 
       print("ESP_SET_DISPLAY_DATA")
       for i in range(3):
@@ -2331,8 +2368,8 @@ def __test_api(device: Optional[str],
   # ESP I/O functions - only works if the device is a Nano Online connected
   # through the network, but not in HTTP transparent mode, as transparent
   # mode bypasses the ESP and sends the commands directly to the UART
-  if __test_esp_io and \
-		(ufrcomm.udpsock is not None or ufrcomm.tcpsock is not None):
+  if __test_esp_io and (ufrcomm.udpsock is not None or \
+		ufrcomm.tcpsock is not None or ufrcomm.websock is not None):
 
     print("ESP_SET_IO_STATE")
     ufrcomm.esp_set_io_state(6, uFRIOState.HIGH)
