@@ -1256,7 +1256,10 @@ class uFRcomm:
     if restore and self.serdev is not None or self.udpsock is not None or \
 		self.tcpsock is not None or self.websock is not None or \
 		self.resturl is not None:
-      self._restore_reader(timeout = timeout)
+      try:
+        self._restore_reader(timeout = timeout)
+      except:
+        pass
 
     if self.serdev is not None:
       self.serdev.close()
