@@ -40,8 +40,6 @@ ohttps://github.com/nfc-rfid-reader-sdk/ufr-doc/raw/master/uFR_COM_Protocol.pdf
 
                      /!\ WARNING: work in progress /!\
 
-Current state of completion:
-
 uFR COM protocol command      uFRcomm class method            Status
 ----------------------------------------------------------------------------
 _UNDEFINED                    N/A                             Not implemented
@@ -121,8 +119,8 @@ READ_COUNTER                  N/A                             Not implemented
 INCREMENT_COUNTER             N/A                             Not implemented
 NT4H_COMMON_CMD               N/A                             Not implemented
 READ_ECC_SIGNATURE            N/A                             Not implemented
-SET_CARD_ID_SEND_CONF         N/A                             Not implemented
-GET_CARD_ID_SEND_CONF         N/A                             Not implemented
+SET_CARD_ID_SEND_CONF         set_card_id_send_conf()         Implemented
+GET_CARD_ID_SEND_CONF         get_card_id_send_conf()         Implemented
 SET_BAD_SELECT_NR_MAX         N/A                             Not implemented
 GET_BAD_SELECT_NR_MAX         N/A                             Not implemented
 ENTER_SLEEP_MODE              enter_sleep_mode()              Implemented
@@ -173,12 +171,13 @@ CHECK_UID_CHANGE              check_uid_change()              Implemented
 RF_RESET                      rf_reset()                      Implemented
 GET_READER_STATUS             get_reader_status()             Implemented
 ----------------------------------------------------------------------------
-State of completion:          35%
+State of completion:          37%
 
 uFRcomm class-specific methods
 ----------------------------------------------------------------------------
 close()
 flush()
+get_async_id()
 
 uFR class methods
 ----------------------------------------------------------------------------
