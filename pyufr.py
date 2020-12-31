@@ -10,10 +10,10 @@ _default_ufr_timeout = 1 #s
 # Extra delays following certain commands, that aren't prescribed in the COM
 # protocol, but that are apparently needed to prevent the reader from going
 # unresponsive after the command
-_post_wake_up_wait: float                 = .1 #s
-_post_reset_wait: float                   = .1 #s
-_post_write_emulation_ndef_wait: float    = .1 #s
-_post_emulation_start_stop_wait: float    = .1 #s
+_post_wake_up_wait: float              = .1 #s
+_post_reset_wait: float                = .1 #s
+_post_write_emulation_ndef_wait: float = .1 #s
+_post_emulation_start_stop_wait: float = .1 #s
 
 # Number of concurrent connection when scanning a subnet for Nano Onlines
 _subnet_probe_concurrent_connections: int = 100
@@ -33,6 +33,7 @@ __test_read_functions               = True
 __test_iso14443_4_functions         = True
 __test_anti_collision_functions     = True
 __test_tag_emulation                = True
+__test_asynchronous_card_id_sending = True
 
 
 
@@ -418,6 +419,10 @@ class uFRanswer:
     self.is_err: bool = False
     self.is_rsp: bool = False
     self.has_ext: bool = False
+    self.is_async_id: bool = False
+
+    self._got_async_id_prefix = False
+    self.async_id: str = ""
 
     self._got_header: bool = False
     self.header: int = 0
@@ -443,7 +448,6 @@ class uFRanswer:
     self._got_ext: bool = False
     self.ext: List[int] = []
 
-    self._got_ext_checksum: bool = False
     self.ext_checksum: int = 0
 
 
@@ -453,19 +457,29 @@ class uFRanswer:
     """Return a one-line human-readable description of the answer
     """
 
-    desc: str = "ACK" if self.is_ack else "ERR" if self.is_err else "RSP"
-    desc += "_EXT" if self.has_ext and not self.is_ack else ""
-    desc += ", cmd=" if self.is_ack or self.is_rsp else ", err="
-    desc += self.code.name if self.code is not None else "None"
-    desc += ", ext_len={}".format(self.ext_len)
-    if self.val0 is not None:
-      desc += ", val0={:02x}h".format(self.val0)
-    if self.val1 is not None:
-      desc += ", val1={:02x}h".format(self.val1)
-    if self.has_ext and self.ext is not None and not self.is_ack:
-      desc += ", ext=("
-      desc += ", ".join(["{:02x}h".format(v) for v in self.ext])
-      desc += ")"
+    desc: str = "ACK" if self.is_ack else "ERR" if self.is_err else \
+		"RSP" if self.is_rsp else "ASYNC_ID" if self.is_async_id else \
+		"INVALID"
+
+    if self.is_ack or self.is_err or self.is_rsp:
+
+      desc += "_EXT" if self.has_ext and not self.is_ack else ""
+      desc += ", cmd=" if self.is_ack or self.is_rsp else ", err="
+      desc += self.code.name if self.code is not None else "None"
+      desc += ", ext_len={}".format(self.ext_len)
+      if self.val0 is not None:
+        desc += ", val0={:02x}h".format(self.val0)
+      if self.val1 is not None:
+        desc += ", val1={:02x}h".format(self.val1)
+      if self.has_ext and self.ext is not None and not self.is_ack:
+        desc += ", ext=("
+        desc += ", ".join(["{:02x}h".format(v) for v in self.ext])
+        desc += ")"
+
+    elif self.is_async_id:
+
+      desc += ", async_id=" + self.async_id
+
     return desc
 
 
@@ -619,32 +633,44 @@ class uFRcomm:
     self.__WAKE_UP_BYTE: int = 0x00
     self.__WAKE_UP_WAIT: float = .01 #s
 
+    # Default asynchronous ID sending prefix and suffix
+    self.__DEFAULT_ASYNC_ID_PREFIX: int = 0xcc
+    self.__DEFAULT_ASYNC_ID_SUFFIX: int = 0xee
+
     ### Variables
     self.serdev: Optional[serial.Serial] = None
 
     self.udpsock: Optional[socket.socket] = None
-    self.udphost: Optional[str] = None
-    self.udpport: Optional[int] = None
+    self._udphost: Optional[str] = None
+    self._udpport: Optional[int] = None
 
     self.tcpsock: Optional[socket.socket] = None
 
     self.websock: Optional[websocket] = None
 
     self.resturl: Optional[str] = None
-    self.postdata: str = ""
+    self.__postdata: str = ""
 
-    self.default_timeout: float = timeout
-    self.current_timeout: float = timeout
+    self._default_timeout: float = timeout
+    self._current_timeout: float = timeout
 
-    self.recbuf: list = []
+    self.__recbuf: list = []
 
-    self.last_cmd: uFRcmd = uFRcmd._UNDEFINED
+    self._last_cmd: uFRcmd = uFRcmd._UNDEFINED
+
+    self.__async_id_enabled: bool = False
+    self.__async_id_prefix: int = 0x00
+    self.__async_id_suffix: int = 0x00
 
     self.answer = uFRanswer()
 
     self.__saved_pcd_mgr_state: Optional[uFRPCDMgrState] = None
     self.__saved_emu_mode: Optional[uFRemuMode] = None
     self.__saved_anti_collision_enabled: Optional[bool] = None
+    self.__saved_async_flags: Optional[int] = None
+    self.__saved_async_prefix: Optional[int] = None
+    self.__saved_async_suffix: Optional[int] = None
+    self.__saved_async_baudrate: Optional[int] = None
 
     # Find out the protocol and associated parameters
     proto: str
@@ -670,8 +696,8 @@ class uFRcomm:
     elif proto == "udp":
       self.udpsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
       self.udpsock.settimeout(timeout)
-      self.udphost = socket.gethostbyname(p1)
-      self.udpport = int(p2)
+      self._udphost = socket.gethostbyname(p1)
+      self._udpport = int(p2)
 
     elif proto == "tcp":
       self.tcpsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -688,14 +714,15 @@ class uFRcomm:
     else:
       raise uFRopenError("unknown uFR device {}".format(dev))
 
-    self.default_timeout = timeout
-    self.current_timeout = timeout
+    self._default_timeout = timeout
+    self._current_timeout = timeout
 
     # Get the current state of the reader if needed
     if restore_on_close:
       if self.get_reader_status(save_status = True, timeout = timeout)[1] == \
 		uFRemuMode.TAG_EMU_DISABLED:
         self.get_anti_collision_status(save_status = True, timeout = timeout)
+        self.get_card_id_send_conf(save_status = True, timeout = timeout)
 
 
 
@@ -768,7 +795,7 @@ class uFRcomm:
 
     # Send to a UDP host
     elif self.udpsock is not None:
-      self.udpsock.sendto(bytes(data), (self.udphost, self.udpport))
+      self.udpsock.sendto(bytes(data), (self._udphost, self._udpport))
 
     # Send to a TCP host
     elif self.tcpsock is not None:
@@ -780,7 +807,7 @@ class uFRcomm:
 
     # "Send" to a HTTP server
     elif self.resturl is not None:
-      self.postdata = "".join(["{:02X}".format(b) for b in data])
+      self.__postdata = "".join(["{:02X}".format(b) for b in data])
 
 
 
@@ -802,16 +829,16 @@ class uFRcomm:
 
     # Change the timeout as needed
     if timeout is None:
-      reset_timeout = (self.current_timeout != self.default_timeout)
-      self.current_timeout = self.default_timeout
+      reset_timeout = (self._current_timeout != self._default_timeout)
+      self._current_timeout = self._default_timeout
     else:
-      reset_timeout = (self.current_timeout != timeout)
-      self.current_timeout = timeout
+      reset_timeout = (self._current_timeout != timeout)
+      self._current_timeout = timeout
 
     # Receive from a serial device
     if self.serdev is not None:
       if reset_timeout:
-        self.serdev.timeout = self.current_timeout
+        self.serdev.timeout = self._current_timeout
       data = self.serdev.read(1)
       if not data:
         raise TimeoutError
@@ -819,15 +846,15 @@ class uFRcomm:
     # Receive from a UDP host
     elif self.udpsock is not None:
       if reset_timeout:
-        self.udpsock.settimeout(self.current_timeout)
-      timeout_tstamp = datetime.now().timestamp() + self.current_timeout
+        self.udpsock.settimeout(self._current_timeout)
+      timeout_tstamp = datetime.now().timestamp() + self._current_timeout
       data = b""
       while not data:
         try:
           data, (ip, _) = self.udpsock.recvfrom(1024)
         except socket.timeout:
           raise TimeoutError
-        if ip != self.udphost:
+        if ip != self._udphost:
           data = b""
         if not data and datetime.now().timestamp() >= timeout_tstamp:
           raise TimeoutError
@@ -835,7 +862,7 @@ class uFRcomm:
     # Receive from a TCP host
     elif self.tcpsock is not None:
       if reset_timeout:
-        self.tcpsock.settimeout(self.current_timeout)
+        self.tcpsock.settimeout(self._current_timeout)
       try:
         data = self.tcpsock.recv(1024)
       except socket.timeout:
@@ -844,7 +871,7 @@ class uFRcomm:
     # Receive from a websocket host
     elif self.websock is not None:
       if reset_timeout:
-        self.websock.settimeout(self.current_timeout)
+        self.websock.settimeout(self._current_timeout)
       try:
         wsframe: websocket.ABNF = self.websock.recv_frame()
       except websocket._exceptions.WebSocketTimeoutException as e:
@@ -858,8 +885,8 @@ class uFRcomm:
     # Receive a POST reply from a HTTP server
     elif self.resturl is not None:
       try:
-        resp: str = requests.post(self.resturl, data = self.postdata,
-			timeout = self.current_timeout).text.rstrip("\r\n\0 ")
+        resp: str = requests.post(self.resturl, data = self.__postdata,
+			timeout = self._current_timeout).text.rstrip("\r\n\0 ")
       except requests.exceptions.ConnectTimeout:
         raise TimeoutError
       if not re.match("^([0-9a-zA-Z][0-9a-zA-Z])+$", resp):
@@ -868,7 +895,7 @@ class uFRcomm:
         else:
           raise uFRresponseError("invalid HTTP POST response: {}".format(resp))
       data = bytes([int(resp[i:i+2], 16) for i in range(0, len(resp), 2)])
-      self.postdata = ""
+      self.__postdata = ""
 
     return data
 
@@ -888,7 +915,7 @@ class uFRcomm:
     packet.append(self._checksum(packet))
     self._send_data(packet)
 
-    self.last_cmd = cmd
+    self._last_cmd = cmd
 
 
 
@@ -947,20 +974,45 @@ class uFRcomm:
     while True:
 
       # Read data if the receive buffer is empty
-      if not self.recbuf:
-        self.recbuf.extend(self._get_data(timeout = timeout))
+      if not self.__recbuf:
+        self.__recbuf.extend(self._get_data(timeout = timeout))
 
       # Parse the receive buffer
-      b: int = self.recbuf.pop(0)
+      b: int = self.__recbuf.pop(0)
 
-      # Get header
-      if not self.answer._got_header:
+      # Get header, or the asynchronous ID sending prefix if it's enabled
+      if not self.answer._got_header and not self.answer._got_async_id_prefix:
         if b in self.__UFR_HEADER_VALS:
           self.answer.header = b
           self.answer.is_ack = (b == uFRhead.ACK_HEADER)
           self.answer.is_err = (b == uFRhead.ERR_HEADER)
           self.answer.is_rsp = (b == uFRhead.RESPONSE_HEADER)
           self.answer._got_header = True
+        elif self.__async_id_enabled and b == self.__async_id_prefix:
+          self.answer._got_async_id_prefix = True
+          self.answer.async_id = ""
+        continue
+
+      # If asynchronous ID sending is enabled and we got the prefix, get the
+      # ID until we hit the suffix
+      if self.__async_id_enabled and self.answer._got_async_id_prefix:
+
+        # If we got a hex digit, add it to the ID
+        if b in b"0123456789ABCDEF":
+          self.answer.async_id += chr(b)
+
+        # If we hit the suffix and the ID we got is an even number of digits,
+        # normalize it and return the answer
+        elif b == self.__async_id_suffix and not len(self.answer.async_id) & 1:
+            self.answer.async_id = ":".join([self.answer.async_id[i:i + 2] \
+					for i in range(0,
+					len(self.answer.async_id), 2)])
+            self.answer.is_async_id = True
+            return self.answer
+
+        else:
+          self.answer.wipe()
+
         continue
 
       # Get the code (either command or error)
@@ -1049,7 +1101,6 @@ class uFRcomm:
       # Get the extended packet's checksum
       if self._checksum(self.answer.ext) == b:
         self.answer.ext_checksum = b
-        self.answer._got_ext_checksum = True
 
         # Return the long answer
         return self.answer
@@ -1068,12 +1119,12 @@ class uFRcomm:
     """
 
     # Read data if the receive buffer is empty
-    if not self.recbuf:
+    if not self.__recbuf:
       data = self._get_data(timeout = timeout)
-      self.recbuf.extend(data)
+      self.__recbuf.extend(data)
 
     # Parse one byte
-    b: int = self.recbuf.pop(0)
+    b: int = self.__recbuf.pop(0)
 
     # Did we get an ACK?
     if b == uFRcmdExtPartAck.ACK_PART:
@@ -1099,9 +1150,9 @@ class uFRcomm:
     """
 
     answer: uFRanswer = self._get_answer(timeout = timeout)
-    if not answer.is_rsp or answer.code != self.last_cmd:
+    if not answer.is_rsp or answer.code != self._last_cmd:
       raise uFRresponseError("expected response to {} - got {}".format(
-				self.last_cmd.name, answer))
+				self._last_cmd.name, answer))
     return answer
 
 
@@ -1141,23 +1192,56 @@ class uFRcomm:
           self.tag_emulation_stop(timeout = timeout)
         self.ad_hoc_emulation_start(timeout = timeout)
 
-    # Should we restore the anti-collision mode?
-    if self.__saved_anti_collision_enabled is not None and \
-		self.get_reader_status(timeout = timeout)[1] == \
+    # Is emulation disabled?
+    if self.get_reader_status(timeout = timeout)[1] == \
 		uFRemuMode.TAG_EMU_DISABLED:
 
-      ac_enabled: bool
-      ac_tag_sel: bool
-      ac_enabled, ac_tag_sel = self.get_anti_collision_status(timeout = timeout)
+      # Should we restore the anti-collision mode?
+      if self.__saved_anti_collision_enabled is not None:
 
-      if self.__saved_anti_collision_enabled and not ac_enabled:
-        self.enable_anti_collision(timeout = timeout)
+        ac_enabled: bool
+        ac_tag_sel: bool
+        ac_enabled, ac_tag_sel = self.get_anti_collision_status(
+							timeout = timeout)
 
-      elif not self.__saved_anti_collision_enabled:
-        if ac_tag_sel:
-          self.deselect_card(timeout = timeout)
-        if ac_enabled:
-          self.disable_anti_collision(timeout = timeout)
+        if self.__saved_anti_collision_enabled and not ac_enabled:
+          self.enable_anti_collision(timeout = timeout)
+
+        elif not self.__saved_anti_collision_enabled:
+          if ac_tag_sel:
+            self.deselect_card(timeout = timeout)
+          if ac_enabled:
+            self.disable_anti_collision(timeout = timeout)
+
+      # Should we restore the asynchronous ID sending parameters?
+      if self.__saved_async_flags is not None and \
+		self.__saved_async_prefix is not None and \
+		self.__saved_async_suffix is not None and \
+		self.__saved_async_baudrate is not None:
+        self.set_card_id_send_conf(baudrate = self.__saved_async_baudrate,
+					prefix = self.__saved_async_prefix,
+					suffix = self.__saved_async_suffix,
+					flags = self.__saved_async_flags,
+					timeout = timeout)
+
+
+
+  def get_async_id(self: uFRcomm,
+			timeout: Optional[float] = None) \
+			-> Optional[str]:
+    """Get asynchronous IDs
+    """
+
+    if not self.__async_id_enabled:
+      raise uFRIOError("asynchronous ID sending not enabled")
+
+    answer: uFRanswer = self._get_answer(timeout = timeout)
+
+    if not answer.is_async_id:
+      raise uFRresponseError("expected asynchronous ID answer "
+				"- got {}".format(answer))
+
+    return answer.async_id if answer.async_id else None
 
 
 
@@ -1181,8 +1265,8 @@ class uFRcomm:
     if self.udpsock is not None:
       self.udpsock.close()
       self.udpsock = None
-      self.udphost = None
-      self.udpport = None
+      self._udphost = None
+      self._udpport = None
 
     if self.tcpsock is not None:
       self.tcpsock.close()
@@ -1193,14 +1277,14 @@ class uFRcomm:
       self.websock = None
 
     self.resturl = None
-    self.postdata = ""
+    self.__postdata = ""
 
-    self.default_timeout = _default_ufr_timeout
-    self.current_timeout = _default_ufr_timeout
+    self._default_timeout = _default_ufr_timeout
+    self._current_timeout = _default_ufr_timeout
 
-    self.recbuf = []
+    self.__recbuf = []
 
-    self.last_cmd = uFRcmd._UNDEFINED
+    self._last_cmd = uFRcmd._UNDEFINED
 
     self.answer.wipe()
 
@@ -1362,7 +1446,7 @@ class uFRcomm:
 
     self._send_cmd(uFRcmd.GET_LAST_CARD_ID_EX)
     try:
-      rsp = self._get_last_command_response(timeout = timeout)
+      rsp: uFRanswer = self._get_last_command_response(timeout = timeout)
     except:
       if self.answer.code == uFRerr.NO_CARD:
         return (uFRcardType._NO_CARD, "")
@@ -1381,7 +1465,7 @@ class uFRcomm:
 
     self._send_cmd(uFRcmd.GET_DLOGIC_CARD_TYPE)
     try:
-      rsp = self._get_last_command_response(timeout = timeout)
+      rsp: uFRanswer = self._get_last_command_response(timeout = timeout)
     except:
       if self.answer.code == uFRerr.NO_CARD:
         return uFRDLCardType._NO_CARD
@@ -1469,7 +1553,7 @@ class uFRcomm:
     # Send the command and read back the data
     self._send_cmd_ext(uFRcmd.LINEAR_READ, par1, 0, cmdext, timeout)
     try:
-      rsp = self._get_last_command_response(timeout = timeout)
+      rsp: uFRanswer = self._get_last_command_response(timeout = timeout)
     except:
       if self.answer.code == uFRerr.NO_CARD:
         return b""
@@ -1477,6 +1561,92 @@ class uFRcomm:
         raise
 
     return bytes(rsp.ext)
+
+
+
+  def set_card_id_send_conf(self: uFRcomm,
+				enable: bool = True,
+				baudrate: int = -1,
+				prefix: int = -1,
+				suffix: int = -1,
+                                flags: int = -1,
+				timeout: Optional[float] = None) \
+				-> None:
+    """Set the asynchronous card ID sending parameters
+    """
+
+    # Contrary to Digital Logic's recommendation, this library doesn't set a
+    # different baudrate for asynchronous card ID sending. By default, if the
+    # method was called without specifying a baudrate and the connection is
+    # serial, reuse the serial connection's baudrate. If the connection is over
+    # the network, the device is a uFR Nano Online, therefore set 115200 bps
+    # as this is the baudrate used by the reader internally.
+    #
+    # If flags and baudrate are valid and were specified explicitely, use the
+    # baudrate as passed
+    if baudrate < 0 or flags < 0 or flags > 0xff:
+      if self.serdev is not None:
+        baudrate = baudrate if baudrate >=0 else self.serdev.baudrate
+      else:
+        baudrate = 115200
+
+    # If the prefix or suffix weren't specified or are invalid, use the
+    # default values
+    if prefix < 0 or prefix > 0xff:
+      prefix = self.__DEFAULT_ASYNC_ID_PREFIX
+    if suffix < 0 or suffix > 0xff:
+      suffix = self.__DEFAULT_ASYNC_ID_SUFFIX
+
+    # If the flags weren't specified explicitely or are invalid, use the enable
+    # parameter to determine them and the final baudrate
+    par0: int
+    if flags < 0 or flags > 0xff:
+      par0 = 0x07 if enable else 0x00
+      baudrate = baudrate if enable else 0
+    else:
+      par0 = flags
+
+    par1: int = 0x00
+
+    params: List[int] = [par0, par1, prefix, suffix,
+			baudrate & 0xff, (baudrate >> 8) & 0xff,
+			(baudrate >> 16) & 0xff, (baudrate >> 24) & 0xff]
+    params.append(self._checksum(params))
+
+    self._send_cmd_ext(uFRcmd.SET_CARD_ID_SEND_CONF, par0, par1, params[2:],
+			timeout = timeout)
+    rsp: uFRanswer = self._get_last_command_response(timeout = timeout)
+
+    # Save the state of the asynchronous ID sending feature and the
+    # prefix / suffix for _get_answer() to catch start IDs
+    self.__async_id_enabled = enable
+    self.__async_id_prefix = prefix
+    self.__async_id_suffix = suffix
+
+
+
+  def get_card_id_send_conf(self: uFRcomm,
+				save_status: bool = False,
+				timeout: Optional[float] = None) \
+				-> Tuple[int, int, int, int]:
+    """Get the asynchronous card ID sending parameters
+    """
+
+    self._send_cmd(uFRcmd.GET_CARD_ID_SEND_CONF)
+    rsp: uFRanswer = self._get_last_command_response(timeout = timeout)
+
+    if rsp.ext[7] != self._checksum(rsp.ext[:7]):
+      raise uFRresponseError("asynchronous parameters checksum error")
+
+    baudrate: int = rsp.ext[3] + (rsp.ext[4] << 8) + \
+			(rsp.ext[5] << 16) + (rsp.ext[6] << 24)
+    if save_status:
+      self.__saved_async_flags = rsp.ext[0]
+      self.__saved_async_prefix = rsp.ext[1]
+      self.__saved_async_suffix = rsp.ext[2]
+      self.__saved_async_baudrate = baudrate
+
+    return (rsp.ext[0], rsp.ext[1], rsp.ext[2], baudrate)
 
 
 
@@ -1488,7 +1658,7 @@ class uFRcomm:
     """
 
     self._send_cmd(uFRcmd.GET_RF_ANALOG_SETTINGS, tag_comm_type.value)
-    rsp = self._get_last_command_response(timeout = timeout)
+    rsp: uFRanswer = self._get_last_command_response(timeout = timeout)
     return rsp.ext
 
 
@@ -1791,12 +1961,12 @@ class uFRcomm:
 				frequency: float,
 				timeout: Optional[float] = None) \
 				-> None:
-    """Make the buzzer emit a continuous sound. Set frequency to 0 or None to
-    stop the sound
+    """Make the buzzer emit a continuous sound. Set frequency to 0 to stop
+    the sound
     """
 
     period: int = ((round(65535 - 1500000 / (2 * frequency))) & 0xffff) \
-		if frequency else 0xffff
+		if frequency > 0 else 0xffff
     self._send_cmd(uFRcmd.SET_SPEAKER_FREQUENCY, period & 0xff, period >> 8)
     self._get_last_command_response(timeout = timeout)
 
@@ -1836,7 +2006,7 @@ class uFRcomm:
     """
 
     self._send_cmd_ext(uFRcmd.APDU_TRANSCEIVE, 0,
-			round(self.default_timeout * 1000) \
+			round(self._default_timeout * 1000) \
 			if apdu_timeout_ms is None else apdu_timeout_ms,
 			c_apdu, timeout)
     return bytes(self._get_last_command_response(timeout = timeout).ext)
@@ -1939,7 +2109,7 @@ class uFRcomm:
     """
 
     self._send_cmd(uFRcmd.GET_ANTI_COLLISION_STATUS)
-    rsp = self._get_last_command_response(timeout = timeout)
+    rsp: uFRanswer = self._get_last_command_response(timeout = timeout)
 
     anti_collision_enabled: bool = rsp.val0 != 0
     anti_collision_card_selected: bool = rsp.val1 != 0
@@ -2232,7 +2402,7 @@ def __test_api(device: Optional[str],
 
   ufr: uFR = uFR()
 
-  # Network probing functions - the device doesn't need to be open for this
+  # Test network probing functions - the device doesn't need to be open for this
   if __test_network_probe_functions:
 
     if not network:
@@ -2256,7 +2426,7 @@ def __test_api(device: Optional[str],
     print("No uFR device specified to test communication")
     return
 
-  # Reader information functions
+  # Test reader information functions
   if __test_reader_info_functions:
 
     print(pad("GET_READER_TYPE:"), hex(ufrcomm.get_reader_type()))
@@ -2267,7 +2437,7 @@ def __test_api(device: Optional[str],
     print(pad("GET_BUILD_NUMBER:"), hex(ufrcomm.get_build_number()))
     print(pad("GET_READER_STATUS:"), ufrcomm.get_reader_status())
 
-  # Ad-hoc (peer-to-peer) functions
+  # Test ad-hoc (peer-to-peer) functions
   if __test_ad_hoc_functions:
 
     print("AD_HOC_EMULATION_START")
@@ -2284,7 +2454,7 @@ def __test_api(device: Optional[str],
     print("AD_HOC_EMULATION_STOP")
     ufrcomm.ad_hoc_emulation_stop()
 
-  # RF analog settings functions
+  # Test RF analog settings functions
   if __test_rf_analog_settings_functions:
 
     tct: uFRtagCommType
@@ -2298,7 +2468,7 @@ def __test_api(device: Optional[str],
         print("SET_RF_ANALOG_SETTINGS")
         ufrcomm.set_rf_analog_settings(tct, False, new_settings)
 
-  # Reset functions
+  # Test reset functions
   if __test_reset_functions:
 
     print("RF_RESET")
@@ -2307,15 +2477,15 @@ def __test_api(device: Optional[str],
     ufrcomm.self_reset()
 
     # Only test the ESP reset function if the device is a Nano Online connected
-    # through the network, but not in HTTP transparent mode, as transparent
-    # mode bypasses the ESP and sends the commands directly to the UART
+    # through the network, but not in HTTP mode, as it bypasses the ESP and
+    # sends the commands directly to the UART
     if ufrcomm.udpsock is not None or ufrcomm.tcpsock is not None or \
 		ufrcomm.websock is not None:
 
       print("ESP_READER_RESET")
       ufrcomm.esp_reader_reset()
 
-  # Sleep functions - only works if the device is connected directly to a
+  # Test sleep functions - only works if the device is connected directly to a
   # a serial port
   if __test_sleep_functions and ufrcomm.serdev is not None:
 
@@ -2324,7 +2494,7 @@ def __test_api(device: Optional[str],
     print("LEAVE_SLEEP_MODE")
     ufrcomm.leave_sleep_mode()
 
-  # LED and buzzer functions
+  # Test LED and buzzer functions
   if __test_led_sound_functions:
 
     if __test_eeprom_writing_functions:
@@ -2350,8 +2520,8 @@ def __test_api(device: Optional[str],
 					uFRbeepSignal.SHORT)
 
     # Only test the ESP LED function if the device is a Nano Online connected
-    # through the network, but not in HTTP transparent mode, as transparent
-    # mode bypasses the ESP and sends the commands directly to the UART
+    # through the network, but not in HTTP mode, as it bypasses the ESP and
+    # sends the commands directly to the UART
     if ufrcomm.udpsock is not None or ufrcomm.tcpsock is not None or \
 		ufrcomm.websock is not None:
 
@@ -2365,9 +2535,9 @@ def __test_api(device: Optional[str],
         sleep(0.1)
       ufrcomm.esp_set_display_data((0, 0, 0), (0, 0, 0), 1000)
 
-  # ESP I/O functions - only works if the device is a Nano Online connected
-  # through the network, but not in HTTP transparent mode, as transparent
-  # mode bypasses the ESP and sends the commands directly to the UART
+  # Test ESP I/O functions - only works if the device is a Nano Online connected
+  # through the network, but not in HTTP mode, as it mode bypasses the ESP and
+  # sends the commands directly to the UART
   if __test_esp_io and (ufrcomm.udpsock is not None or \
 		ufrcomm.tcpsock is not None or ufrcomm.websock is not None):
 
@@ -2378,7 +2548,7 @@ def __test_api(device: Optional[str],
     ufrcomm.esp_set_io_state(6, uFRIOState.LOW)
     print(pad("ESP_GET_IO_STATE"), ufrcomm.esp_get_io_state())
 
-  # UID functions
+  # Test UID functions
   if __test_uid_functions:
 
       cid: Tuple[uFRcardType, int] = ufrcomm.get_card_id()
@@ -2394,7 +2564,7 @@ def __test_api(device: Optional[str],
       print(pad("LINEAR_READ:"),
 			ufrcomm.linear_read(uFRauthMode.T2T_NO_PWD_AUTH, 0, 10))
 
-  # Get ISO14443-4 functions
+  # Test ISO14443-4 functions
   if __test_iso14443_4_functions:
 
     print("SET_ISO_14443_4_MODE")
@@ -2404,7 +2574,7 @@ def __test_api(device: Optional[str],
       if ufrcomm.answer.code != uFRerr.NO_CARD:
         raise
 
-  # Anti-collision functions
+  # Test anti-collision functions
   if __test_anti_collision_functions:
 
     print("SELF_RESET")
@@ -2429,7 +2599,7 @@ def __test_api(device: Optional[str],
     print(pad("GET_ANTI_COLLISION_STATUS:"),
 					ufrcomm.get_anti_collision_status())
 
-  # Tag emulation functions
+  # Test tag emulation functions
   if __test_tag_emulation:
 
     eeprom_ndef: bytes = b"\x03\x10\xd1\x01\x0cU\x01d-logic.net\xfe"
@@ -2447,6 +2617,22 @@ def __test_api(device: Optional[str],
     print(pad("GET_READER_STATUS:"), ufrcomm.get_reader_status())
     print("TAG_EMULATION_STOP")
     ufrcomm.tag_emulation_stop()
+
+  # Test asynchronous card ID sending functions, but not in HTTP mode, as it
+  # is synchronous by nature
+  if __test_asynchronous_card_id_sending and ufrcomm.resturl is None:
+    print("SET_CARD_ID_SEND_CONF")
+    ufrcomm.set_card_id_send_conf(True)
+    print(pad("GET_CARD_ID_SEND_CONF"), ufrcomm.get_card_id_send_conf())
+    print("Waiting for asynchronous IDs...")
+    while True:
+      try:
+        print(ufrcomm.get_async_id(3))
+      except:
+        break
+    print("SET_CARD_ID_SEND_CONF")
+    ufrcomm.set_card_id_send_conf(False)
+    print(pad("GET_CARD_ID_SEND_CONF"), ufrcomm.get_card_id_send_conf())
 
   # Close the device
   ufrcomm.close()
