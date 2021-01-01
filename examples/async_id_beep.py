@@ -48,8 +48,10 @@ if __name__ == "__main__":
       # Determine a beep frequency based on the card's UId - or 0 to disable
       # beeping - and set the reader's buzzer
       if uid:
-        beep_frequency = 200 + int(uid.replace(":", "")[-8:], 16) / 2000000
+        print("Card scanned: UID = {}".format(uid))
+        beep_frequency = 200 + int(uid[-8:], 16) / 2000000
       else:
+        print("Card removed")
         beep_frequency = 0
 
       ufr.set_speaker_frequency(beep_frequency)

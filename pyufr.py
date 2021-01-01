@@ -765,7 +765,7 @@ class uFRcomm:
     """Convert bytes or a list of integers into a human-readable UID
     """
 
-    return ":".join(["{:02X}".format(b) for b in bytesuid])
+    return "".join(["{:02X}".format(b) for b in bytesuid])
 
 
 
@@ -775,7 +775,7 @@ class uFRcomm:
     """Convert a human-readable UID into bytes
     """
 
-    return bytes([int(v, 16) for v in struid.split(":")])
+    return bytes([int(struid[i : i + 2], 16) for i in range(0, len(struid), 2)])
 
 
 
@@ -1011,11 +1011,8 @@ class uFRcomm:
         # If we hit the suffix and the ID we got is an even number of digits,
         # normalize it and return the answer
         elif b == self.__async_id_suffix and not len(self.answer.async_id) & 1:
-            self.answer.async_id = ":".join([self.answer.async_id[i:i + 2] \
-					for i in range(0,
-					len(self.answer.async_id), 2)])
-            self.answer.is_async_id = True
-            return self.answer
+          self.answer.is_async_id = True
+          return self.answer
 
         else:
           self.answer.wipe()
