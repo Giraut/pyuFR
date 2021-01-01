@@ -1238,14 +1238,13 @@ class uFRcomm:
 
   def get_async_id(self: uFRcomm,
 			timeout: Optional[float] = None) \
-			-> Optional[str]:
+			-> str:
     """Get asynchronous IDs
     """
 
     # Consume IDs in the cache first
     if self._async_ids_cache:
-      uid: str = self._async_ids_cache.pop(0)
-      return uid if uid else None
+      return self._async_ids_cache.pop(0)
 
     # Wait for an asynchronous ID from the device next
     if not self.__async_id_enabled:
@@ -1257,7 +1256,7 @@ class uFRcomm:
       raise uFRresponseError("expected asynchronous ID answer "
 				"- got {}".format(answer))
 
-    return answer.async_id if answer.async_id else None
+    return answer.async_id
 
 
 
