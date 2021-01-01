@@ -672,6 +672,8 @@ class uFRcomm:
     self.__saved_async_suffix: Optional[int] = None
     self.__saved_async_baudrate: Optional[int] = None
 
+    self._async_ids_cache: List[str] = []
+
     # Find out the protocol and associated parameters
     proto: str
     p1: str
@@ -950,7 +952,12 @@ class uFRcomm:
 
     self._send_cmd(cmd, par0, par1, ext_len)
 
-    answer: uFRanswer = self._get_answer(timeout = timeout)
+    while True:
+      answer: uFRanswer = self._get_answer(timeout = timeout)
+      if self.__async_id_enabled and answer.is_async_id:
+        self._async_ids_cache.append(answer.async_id)
+      else:
+        break
 
     if not answer.is_ack or answer.code != cmd.value:
       raise uFRresponseError("expected ACK to {}, ext_len={}, "
@@ -1149,7 +1156,13 @@ class uFRcomm:
     answer is unexpected
     """
 
-    answer: uFRanswer = self._get_answer(timeout = timeout)
+    while True:
+      answer: uFRanswer = self._get_answer(timeout = timeout)
+      if self.__async_id_enabled and answer.is_async_id:
+        self._async_ids_cache.append(answer.async_id)
+      else:
+        break
+
     if not answer.is_rsp or answer.code != self._last_cmd:
       raise uFRresponseError("expected response to {} - got {}".format(
 				self._last_cmd.name, answer))
@@ -1232,6 +1245,12 @@ class uFRcomm:
     """Get asynchronous IDs
     """
 
+    # Consume IDs in the cache first
+    if self._async_ids_cache:
+      uid: str = self._async_ids_cache.pop(0)
+      return uid if uid else None
+
+    # Wait for an asynchronous ID from the device next
     if not self.__async_id_enabled:
       raise uFRIOError("asynchronous ID sending not enabled")
 
@@ -1290,6 +1309,8 @@ class uFRcomm:
     self._last_cmd = uFRcmd._UNDEFINED
 
     self.answer.wipe()
+
+    self._async_ids_cache = []
 
 
 
@@ -1619,6 +1640,10 @@ class uFRcomm:
     self._send_cmd_ext(uFRcmd.SET_CARD_ID_SEND_CONF, par0, par1, params[2:],
 			timeout = timeout)
     rsp: uFRanswer = self._get_last_command_response(timeout = timeout)
+
+    # Clear the asynchronous IDs cache if we asynchronous ID sending is disabled
+    if not enable:
+      self._async_ids_cache = []
 
     # Save the state of the asynchronous ID sending feature and the
     # prefix / suffix for _get_answer() to catch start IDs
