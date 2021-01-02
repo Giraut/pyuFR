@@ -671,6 +671,8 @@ class uFRcomm:
     self.__saved_async_prefix: Optional[int] = None
     self.__saved_async_suffix: Optional[int] = None
     self.__saved_async_baudrate: Optional[int] = None
+    self.__saved_speaker_frequency: Optional[float] = None
+    self.__saved_red_led_state: bool = False
     self.__saved_esp_display_data_duration_ms: Optional[int] = None
 
     self._async_ids_cache: List[str] = []
@@ -1235,10 +1237,21 @@ class uFRcomm:
 					flags = self.__saved_async_flags,
 					timeout = timeout)
 
+    # If the speaker frequency was last set to something other than 0, set it to
+    # 0 to turn off the speaker
+    if self.__saved_speaker_frequency is not None and \
+	self.__saved_speaker_frequency != 0:
+      self.set_speaker_frequency(0, timeout = timeout)
+
+    # If the red LED was last set, assume the reader started out with the LED
+    # off (we have no way to know for sure) and turn it back off
+    if self.__saved_red_led_state == True:
+      self.red_light_control(False, timeout = timeout)
+
     # If the ESP LEDs were last set without any duration, return them to their
     # default behavior by setting when with a very short timeout
     if self.__saved_esp_display_data_duration_ms == 0:
-      self.esp_set_display_data((0, 0, 0), (0, 0, 0), 1)
+      self.esp_set_display_data((0, 0, 0), (0, 0, 0), 1, timeout = timeout)
 
 
 
@@ -1970,6 +1983,7 @@ class uFRcomm:
 
     self._send_cmd(uFRcmd.RED_LIGHT_CONTROL, 1 if state else 0)
     self._get_last_command_response(timeout = timeout)
+    self.__saved_red_led_state = True if state else False
 
 
 
@@ -1999,6 +2013,7 @@ class uFRcomm:
 		if frequency > 0 else 0xffff
     self._send_cmd(uFRcmd.SET_SPEAKER_FREQUENCY, period & 0xff, period >> 8)
     self._get_last_command_response(timeout = timeout)
+    self.__saved_speaker_frequency = frequency
 
 
 
