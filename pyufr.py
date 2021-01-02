@@ -1137,7 +1137,7 @@ class uFRcomm:
     if b == uFRcmdExtPartAck.ACK_LAST_PART:
       return False
 
-    # We got an expected byte
+    # We got an unexpected byte
     raise uFRresponseError("expected {} ({:02x}h) or {} ({:02x}h) - "
 				"got {:02x}h".format(
 				uFRcmdExtPartAck.ACK_PART.name,
