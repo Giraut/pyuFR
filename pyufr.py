@@ -671,6 +671,7 @@ class uFRcomm:
     self.__saved_async_prefix: Optional[int] = None
     self.__saved_async_suffix: Optional[int] = None
     self.__saved_async_baudrate: Optional[int] = None
+    self.__saved_esp_display_data_duration_ms: Optional[int] = None
 
     self._async_ids_cache: List[str] = []
 
@@ -1233,6 +1234,11 @@ class uFRcomm:
 					suffix = self.__saved_async_suffix,
 					flags = self.__saved_async_flags,
 					timeout = timeout)
+
+    # If the ESP LEDs were last set without any duration, return them to their
+    # default behavior by setting when with a very short timeout
+    if self.__saved_esp_display_data_duration_ms == 0:
+      self.esp_set_display_data((0, 0, 0), (0, 0, 0), 1)
 
 
 
@@ -2181,16 +2187,20 @@ class uFRcomm:
     """Set the color of the two ESP LEDs for a certain duration in ms. Set the
     duration to 0 to keep those colors permanently. Set a short duration to
     return to reader-managed colors
-    WARNING: don't set two non-zero timeouts in a row, or the reader will go
-             unresponsive when the first delay elapses. If you want to
-             play a color sequence, only the last command should have a
-             non-zero timeout, and you should manage the sequence's delays
-             yourself
+    WARNING: the duration value doesn't work like you expect. If you set it
+             repeatedly without waiting for the previous duration to elapse,
+             the new duration doesn't overwrite the previous value. Instead,
+             the reader schedules a new "off" timeout but doesn't cancel the
+             previous one. If you schedule too many at the same time, the
+             reader will crash. As a result, If you want to play a color
+             sequence, only the last command should have a non-zero timeout,
+             and you should manage the sequence's delays yourself
     """
 
     self._send_cmd_ext(uFRcmd.ESP_SET_DISPLAY_DATA, duration_ms & 0xff,
 			duration_ms >> 8,list(rgb1) + list(rgb2), timeout)
     self._get_last_command_response(timeout = timeout)
+    self.__saved_esp_display_data_duration_ms = duration_ms
 
 
 
