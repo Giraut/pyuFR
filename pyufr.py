@@ -654,7 +654,7 @@ class uFRcomm:
     self._default_timeout: float = timeout
     self._current_timeout: float = timeout
 
-    self.__recbuf: list = []
+    self.__recbuf: List[int] = []
 
     self._last_cmd: uFRcmd = uFRcmd._UNDEFINED
 
@@ -896,7 +896,7 @@ class uFRcomm:
           raise uFRresponseError("empty HTTP POST response")
         else:
           raise uFRresponseError("invalid HTTP POST response: {}".format(resp))
-      data = bytes([int(resp[i:i+2], 16) for i in range(0, len(resp), 2)])
+      data = self._uid_str2bytes(resp)
       self.__postdata = ""
 
     return data
