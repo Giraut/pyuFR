@@ -38,7 +38,7 @@ if __name__ == "__main__":
     # inactivity
     while True:
 
-      # Get an ID if a card comes in the field, or None if the card goes off
+      # Get an ID if a card comes in the field, or "" if the card goes off
       # the field
       try:
         uid = ufr.get_async_id(30)
