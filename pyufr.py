@@ -2364,7 +2364,8 @@ def __print_api_state_of_completion() \
   implemented
   """
 
-  comcmds: List[str] = [cmd.name for cmd in uFRcmd]
+  comcmds: List[str] = [cmd.name for cmd in uFRcmd \
+			if not cmd.name.startswith("_")]
   ufrcomm_pubclassmets: List[str] = [attribute for attribute in dir(uFRcomm) \
 			if callable(getattr(uFRcomm, attribute)) and \
 			not attribute.startswith('_')]

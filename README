@@ -42,7 +42,6 @@ ohttps://github.com/nfc-rfid-reader-sdk/ufr-doc/raw/master/uFR_COM_Protocol.pdf
 
 uFR COM protocol command      uFRcomm class method            Status
 ----------------------------------------------------------------------------
-_UNDEFINED                    N/A                             Not implemented
 GET_READER_TYPE               get_reader_type()               Implemented
 GET_READER_SERIAL             get_reader_serial()             Implemented
 GET_SERIAL_NUMBER             get_serial_number()             Implemented
