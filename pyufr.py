@@ -677,9 +677,9 @@ class uFRcomm:
     self.__saved_async_suffix: Optional[int] = None
     self.__saved_async_baudrate: Optional[int] = None
     self.__saved_speaker_frequency: Optional[float] = None
-    self.__saved_red_led_state: bool = False
+    self.__saved_red_led_state: Optional[bool] = None
     self.__saved_esp_display_data_duration_ms: Optional[int] = None
-    self.__rf_field_set_directly = False
+    self.__rf_field_set_directly: Optional[bool] = None
 
     self._async_ids_cache: List[str] = []
 
@@ -734,6 +734,8 @@ class uFRcomm:
 		uFRemuMode.TAG_EMU_DISABLED:
         self.get_anti_collision_status(save_status = True, timeout = timeout)
         self.get_card_id_send_conf(save_status = True, timeout = timeout)
+      self.__saved_red_led_state = False	# Assume the red LED is off
+      self.__rf_field_set_directly = False
 
 
 
@@ -1186,7 +1188,8 @@ class uFRcomm:
     emu_mode: uFRemuMode
 
     # If the RF field was set directly, reset it
-    if self.__rf_field_set_directly:
+    if self.__rf_field_set_directly is not None and \
+	self.__rf_field_set_directly:
       self.rf_reset(uFRRFfieldCtl.RESET, timeout = timeout)
 
     # Should we restore the emulation / ad-hoc (peer-to-peer) modes?
@@ -1215,8 +1218,14 @@ class uFRcomm:
           self.tag_emulation_stop(timeout = timeout)
         self.ad_hoc_emulation_start(timeout = timeout)
 
-    # Is emulation disabled?
-    if self.get_reader_status(timeout = timeout)[1] == \
+    # Recheck if emulation is disabled if we should restore the anti-collision
+    # mode or the asynchronous ID sending parameters
+    if (self.__saved_anti_collision_enabled is not None or (
+		self.__saved_async_flags is not None and \
+		self.__saved_async_prefix is not None and \
+		self.__saved_async_suffix is not None and \
+		self.__saved_async_baudrate is not None)) and \
+		self.get_reader_status(timeout = timeout)[1] == \
 		uFRemuMode.TAG_EMU_DISABLED:
 
       # Should we restore the anti-collision mode?
@@ -1255,7 +1264,8 @@ class uFRcomm:
 
     # If the red LED was last set, assume the reader started out with the LED
     # off (we have no way to know for sure) and turn it back off
-    if self.__saved_red_led_state == True:
+    if self.__saved_red_led_state is not None and \
+		self.__saved_red_led_state == True:
       self.red_light_control(False, timeout = timeout)
 
     # If the ESP LEDs were last set without any duration, return them to their
@@ -1777,7 +1787,7 @@ class uFRcomm:
 
     self._send_cmd(uFRcmd.RF_RESET, op.value, 0)
     self._get_last_command_response(timeout = timeout)
-    if op != uFRRFfieldCtl.RESET:
+    if self.__rf_field_set_directly is not None and op != uFRRFfieldCtl.RESET:
       self.__rf_field_set_directly = True
 
 
@@ -1996,7 +2006,8 @@ class uFRcomm:
 
     self._send_cmd(uFRcmd.RED_LIGHT_CONTROL, 1 if state else 0)
     self._get_last_command_response(timeout = timeout)
-    self.__saved_red_led_state = True if state else False
+    if self.__saved_red_led_state is not None:
+      self.__saved_red_led_state = True if state else False
 
 
 

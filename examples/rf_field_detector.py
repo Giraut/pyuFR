@@ -6,7 +6,6 @@ Useful to determine if a cellphone's NFC chip is working properly for example
 ### Modules
 import re
 import sys
-import ndef
 import argparse
 from datetime import datetime
 
