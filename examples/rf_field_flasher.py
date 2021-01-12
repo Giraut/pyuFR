@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """Turn the RF field on and off repeatedly at the specified frequency
-Requires firmware v5.0.51 or greater
+Requires uFR firmware v5.0.51 or greater
 """
 
 ### Modules
@@ -41,7 +41,7 @@ if __name__ == "__main__":
     ufr.enable_anti_collision()
 
     rf_field_on = True
-    warning_sent = False
+    warn_if_too_fast = True
 
     half_period = .5 / args.frequency
 
@@ -55,15 +55,15 @@ if __name__ == "__main__":
       ufr.rf_reset(uFRRFfieldCtl.ON if rf_field_on else uFRRFfieldCtl.OFF)
 
       cmd_duration = datetime.now().timestamp() - cmd_start_tstamp
-      delay_remaining = half_period - cmd_duration
+      remaininng_wait = half_period - cmd_duration
 
       # If the command took longer than one half period, warn the user
-      if delay_remaining <= 0:
-        if not warning_sent:
+      if remaininng_wait <= 0:
+        if warn_if_too_fast:
           print("Warning: {} too fast for your uFR reader and/or your " \
 		"computer.".format(args.frequency))
-          warning_sent = True
+          warn_if_too_fast = False
         continue
 
       # Sleep long enough to wait for the end of the half period
-      sleep(delay_remaining)
+      sleep(remaininng_wait)
