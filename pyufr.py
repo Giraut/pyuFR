@@ -372,6 +372,11 @@ class uFRIOState(IntEnum):
   HIGH: int                                    = 1
   INPUT: int                                   = 2
 
+class uFRRFfieldCtl(IntEnum):
+  RESET: int                                   = 0
+  ON: int                                      = 1
+  OFF: int                                     = 2
+
 class uFRemuMode(IntEnum):
   TAG_EMU_DISABLED: int                        = 0
   TAG_EMU_DEDICATED: int                       = 1
@@ -1759,12 +1764,13 @@ class uFRcomm:
 
 
   def rf_reset(self: uFRcomm,
+		op: uFRRFfieldCtl = uFRRFfieldCtl.RESET,
 		timeout: Optional[float] = None) \
 		-> None:
-    """Reset the RF field
+    """Control RF field: either reset it (default), turn it ON or turn it OFF
     """
 
-    self._send_cmd(uFRcmd.RF_RESET)
+    self._send_cmd(uFRcmd.RF_RESET, op.value, 0)
     self._get_last_command_response(timeout = timeout)
 
 
@@ -2523,6 +2529,12 @@ def __test_api(device: Optional[str],
 
     print("RF_RESET")
     ufrcomm.rf_reset()
+    print("RF_OFF")
+    ufrcomm.rf_reset(uFRRFfieldCtl.OFF)
+    sleep(.5)
+    print("RF_ON")
+    ufrcomm.rf_reset(uFRRFfieldCtl.ON)
+    sleep(.5)
     print("SELF_RESET")
     ufrcomm.self_reset()
 

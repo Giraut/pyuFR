@@ -43,6 +43,7 @@ if __name__ == "__main__":
 					# "let go" of any card in the field
 					# long enough to prevent polling from
 					# restarting before anti-collision is on
+					# Required for firmware < v5.0.51
     ufr.enable_anti_collision()		# This disables polling in ad-hoc
 					# emulation mode
     ufr.ad_hoc_emulation_start()	# Without polling, this turns off the
