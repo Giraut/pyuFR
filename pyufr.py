@@ -737,11 +737,19 @@ class uFRcomm:
 
     # Get the current state of the reader if needed
     if restore_on_close:
+
+      # Unconditionally wake up the reader in case it's asleep
+      self.leave_sleep_mode()
+
+      # Save the reader status, then anti-collision status and asynchronous
+      # card ID sending parameters if we can
       if self.get_reader_status(save_status = True, timeout = timeout)[1] == \
 		uFRemuMode.TAG_EMU_DISABLED:
         self.get_anti_collision_status(save_status = True, timeout = timeout)
         self.get_card_id_send_conf(save_status = True, timeout = timeout)
-      self.__saved_red_led_state = False	# Assume the red LED is off
+
+      # Assume the red LED is off, since we can't probe its current state
+      self.__saved_red_led_state = False
 
 
 
