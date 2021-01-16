@@ -679,7 +679,6 @@ class uFRcomm:
     self.__saved_speaker_frequency: Optional[float] = None
     self.__saved_red_led_state: Optional[bool] = None
     self.__saved_esp_display_data_duration_ms: Optional[int] = None
-    self.__rf_field_set_directly: Optional[bool] = None
 
     self._async_ids_cache: List[str] = []
 
@@ -735,7 +734,6 @@ class uFRcomm:
         self.get_anti_collision_status(save_status = True, timeout = timeout)
         self.get_card_id_send_conf(save_status = True, timeout = timeout)
       self.__saved_red_led_state = False	# Assume the red LED is off
-      self.__rf_field_set_directly = False
 
 
 
@@ -1186,11 +1184,6 @@ class uFRcomm:
 
     pcd_mgr_state: uFRPCDMgrState
     emu_mode: uFRemuMode
-
-    # If the RF field was set directly, reset it
-    if self.__rf_field_set_directly is not None and \
-	self.__rf_field_set_directly:
-      self.rf_reset(uFRRFfieldCtl.RESET, timeout = timeout)
 
     # Should we restore the emulation / ad-hoc (peer-to-peer) modes?
     if self.__saved_pcd_mgr_state is not None and \
@@ -1787,8 +1780,6 @@ class uFRcomm:
 
     self._send_cmd(uFRcmd.RF_RESET, op.value, 0)
     self._get_last_command_response(timeout = timeout)
-    if self.__rf_field_set_directly is not None and op != uFRRFfieldCtl.RESET:
-      self.__rf_field_set_directly = True
 
 
 
