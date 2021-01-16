@@ -42,6 +42,7 @@ from typing import Any, Type, List, Tuple, Dict, Callable, Generator, \
 			Union, Optional
 from types import TracebackType
 import re
+import math
 import socket
 import requests
 from time import sleep
@@ -644,6 +645,7 @@ class uFRcomm:
 
     ### Variables
     self.serdev: Optional[serial.Serial] = None
+    self._baudrate: Optional[int] = None
 
     self.udpsock: Optional[socket.socket] = None
     self._udphost: Optional[str] = None
@@ -701,7 +703,8 @@ class uFRcomm:
 
     # Open the device
     if proto == "serial":
-      self.serdev = serial.Serial(p1, int(p2), timeout = timeout)
+      self._baudrate = int(p2)
+      self.serdev = serial.Serial(p1, self._baudrate, timeout = timeout)
 
     elif proto == "udp":
       self.udpsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -916,7 +919,8 @@ class uFRcomm:
 		cmd: uFRcmd,
 		par0: int = 0,
 		par1: int = 0,
-		ext_len: int  = 0) \
+		ext_len: int  = 0,
+                preamble: Union[List[int], bytes] = b"") \
 		-> None:
     """Send a short command
     """
@@ -924,6 +928,9 @@ class uFRcomm:
     packet: List[int] = [uFRhead.CMD_HEADER.value, cmd.value,
 			uFRtrail.CMD_TRAILER.value, ext_len, par0, par1]
     packet.append(self._checksum(packet))
+    if preamble:
+      packet = list(preamble) + packet
+
     self._send_data(packet)
 
     self._last_cmd = cmd
@@ -1311,6 +1318,7 @@ class uFRcomm:
     if self.serdev is not None:
       self.serdev.close()
       self.serdev = None
+      self._baudrate = None
 
     if self.udpsock is not None:
       self.udpsock.close()
@@ -1758,14 +1766,38 @@ class uFRcomm:
 
 
   def leave_sleep_mode(self: uFRcomm,
+			smart_wakeup_timing = True,
 			timeout: Optional[float] = None) \
 			-> None:
     """Wake up the reader
+
+    By default, wait for the required amount of time after sending the wake-up
+    byte by sending as many zeros as required by the serial connection to the
+    reader to spend that amount of time.
+    The uFR reader seems to ignore those zeros without ill effect, and trigger
+    on the actual wake-up command as soon as it sees it, after it wakes up.
+    It's also the only method that works reliably over UDP or TCP with the
+    uFR Nano Online, as the block wake-up byte + timing bytes + wake-up command
+    bytes are sent as one single message.
+
+    If this causes problems however, you can revert to a simple sleep() timing
+    by setting smart_wakeup_timing to False
     """
 
-    self._send_data([self.__WAKE_UP_BYTE])
-    sleep(self.__WAKE_UP_WAIT)
-    self._send_cmd(uFRcmd.LEAVE_SLEEP_MODE)
+    baudrate: int = 115200 if (self.serdev is not None and \
+				self._baudrate == 1000000) or \
+				self.udpsock is not None or \
+				self.tcpsock is not None else self._baudrate
+
+    if smart_wakeup_timing and baudrate is not None:
+      self._send_cmd(uFRcmd.LEAVE_SLEEP_MODE, preamble = \
+			[self.__WAKE_UP_BYTE] + \
+			[0] * math.ceil(self.__WAKE_UP_WAIT * baudrate / 9))
+    else:
+      self._send_data([self.__WAKE_UP_BYTE])
+      sleep(self.__WAKE_UP_WAIT)
+      self._send_cmd(uFRcmd.LEAVE_SLEEP_MODE)
+
     self._get_last_command_response(timeout = timeout)
     sleep(_post_wake_up_wait)
 
@@ -2557,8 +2589,9 @@ def __test_api(device: Optional[str],
       ufrcomm.esp_reader_reset()
 
   # Test sleep functions - only works if the device is connected directly to a
-  # a serial port
-  if __test_sleep_functions and ufrcomm.serdev is not None:
+  # a serial port, or through the network with UDP or TCP, but not in HTTP mode
+  if __test_sleep_functions and (ufrcomm.serdev is not None or \
+		ufrcomm.udpsock is not None or ufrcomm.tcpsock is not None):
 
     print("ENTER_SLEEP_MODE")
     ufrcomm.enter_sleep_mode()
