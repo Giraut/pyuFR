@@ -685,6 +685,7 @@ class uFRcomm:
     self.__saved_speaker_frequency: Optional[float] = None
     self.__saved_red_led_state: Optional[bool] = None
     self.__saved_esp_display_data_duration_ms: Optional[int] = None
+    self.__reader_asleep = False
 
     self._async_ids_cache: List[str] = []
 
@@ -1192,6 +1193,11 @@ class uFRcomm:
 			-> None:
     """Restore the saved state of the reader, if it has been saved
     """
+
+    # If the reader is asleep, wake it up
+    if self.__reader_asleep:
+      self.leave_sleep_mode(timeout = timeout)
+    self.__reader_asleep = False
 
     pcd_mgr_state: uFRPCDMgrState
     emu_mode: uFRemuMode
@@ -1791,6 +1797,7 @@ class uFRcomm:
 
     self._send_cmd(uFRcmd.ENTER_SLEEP_MODE)
     self._get_last_command_response(timeout = timeout)
+    self.__reader_asleep = True
 
 
 
@@ -1829,6 +1836,7 @@ class uFRcomm:
 
     self._get_last_command_response(timeout = timeout)
     sleep(_post_wake_up_wait)
+    self.__reader_asleep = False
 
 
 
