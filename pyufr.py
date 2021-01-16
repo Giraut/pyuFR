@@ -20,8 +20,9 @@ _subnet_probe_concurrent_connections: int = 100
 
 # API tests
 __test_network_probe_functions      = True
-__test_eeprom_writing_functions     = False
 __test_reader_info_functions        = True
+__test_eeprom_reading_functions     = True
+__test_eeprom_writing_functions     = False
 __test_ad_hoc_functions             = True
 __test_rf_analog_settings_functions = True
 __test_reset_functions              = True
@@ -44,7 +45,6 @@ from types import TracebackType
 import re
 import math
 import socket
-import requests
 from time import sleep
 from enum import IntEnum
 from datetime import datetime
@@ -56,6 +56,10 @@ except:
   pass
 try:
   import websocket						# type: ignore
+except:
+  pass
+try:
+  import requests
 except:
   pass
 try:
@@ -1458,6 +1462,29 @@ class uFRcomm:
 
 
 
+  def user_data_read(self: uFRcomm,
+			timeout: Optional[float] = None) \
+			-> List[int]:
+    """Get the reader's firmware's build number
+    """
+
+    self._send_cmd(uFRcmd.USER_DATA_READ)
+    return self._get_last_command_response(timeout = timeout).ext
+
+
+
+  def user_data_write(self: uFRcomm,
+			data: Union[List[int], bytes],
+			timeout: Optional[float] = None) \
+			-> None:
+    """Get the reader's firmware's build number
+    """
+
+    self._send_cmd_ext(uFRcmd.USER_DATA_WRITE, 0, 0, data, timeout = timeout)
+    self._get_last_command_response(timeout = timeout)
+
+
+
   def get_card_id(self: uFRcomm,
 			timeout: Optional[float] = None) \
 			-> Tuple[uFRcardType, int]:
@@ -1611,7 +1638,8 @@ class uFRcomm:
       cmdext.extend([length & 0xff, length >> 8])
 
     # Send the command and read back the data
-    self._send_cmd_ext(uFRcmd.LINEAR_READ, par1, 0, cmdext, timeout)
+    self._send_cmd_ext(uFRcmd.LINEAR_READ, authmode.value, par1, cmdext,
+			timeout = timeout)
     try:
       rsp: uFRanswer = self._get_last_command_response(timeout = timeout)
     except:
@@ -1737,7 +1765,8 @@ class uFRcomm:
     """
 
     self._send_cmd_ext(uFRcmd.SET_RF_ANALOG_SETTINGS, tag_comm_type,
-			1 if factory_settings else 0, settings, timeout)
+			1 if factory_settings else 0, settings,
+			timeout = timeout)
     self._get_last_command_response(timeout = timeout)
 
 
@@ -1784,7 +1813,7 @@ class uFRcomm:
     by setting smart_wakeup_timing to False
     """
 
-    baudrate: int = 115200 if (self.serdev is not None and \
+    baudrate: Optional[int] = 115200 if (self.serdev is not None and \
 				self._baudrate == 1000000) or \
 				self.udpsock is not None or \
 				self.tcpsock is not None else self._baudrate
@@ -1906,7 +1935,7 @@ class uFRcomm:
 
     # Send the command and first CMD_EXT part
     self._send_cmd_ext(uFRcmd.WRITE_EMULATION_NDEF, 1 if in_ram else 0, 0,
-			ext_parts.pop(0), timeout)
+			ext_parts.pop(0), timeout = timeout)
 
     # Wait for ACKs and send subsequent parts if we have more than one part
     if ext_parts:
@@ -2100,7 +2129,7 @@ class uFRcomm:
     self._send_cmd_ext(uFRcmd.APDU_TRANSCEIVE, 0,
 			round(self._default_timeout * 1000) \
 			if apdu_timeout_ms is None else apdu_timeout_ms,
-			c_apdu, timeout)
+			c_apdu, timeout = timeout)
     return bytes(self._get_last_command_response(timeout = timeout).ext)
 
 
@@ -2174,7 +2203,8 @@ class uFRcomm:
     """
 
     bytesuid: bytes = self._uid_str2bytes(uid)
-    self._send_cmd_ext(uFRcmd.SELECT_CARD, len(bytesuid), 0, bytesuid, timeout)
+    self._send_cmd_ext(uFRcmd.SELECT_CARD, len(bytesuid), 0, bytesuid,
+			timeout = timeout)
     return self.__UFR_VAL_TO_DL_CARD_TYPE[
 		self._get_last_command_response(timeout = timeout).val0]
 
@@ -2260,7 +2290,8 @@ class uFRcomm:
     """
 
     self._send_cmd_ext(uFRcmd.ESP_SET_DISPLAY_DATA, duration_ms & 0xff,
-			duration_ms >> 8,list(rgb1) + list(rgb2), timeout)
+			duration_ms >> 8,list(rgb1) + list(rgb2),
+			timeout = timeout)
     self._get_last_command_response(timeout = timeout)
     self.__saved_esp_display_data_duration_ms = duration_ms
 
@@ -2534,6 +2565,17 @@ def __test_api(device: Optional[str],
     print(pad("GET_BUILD_NUMBER:"), hex(ufrcomm.get_build_number()))
     print(pad("GET_READER_STATUS:"), ufrcomm.get_reader_status())
 
+  # Test EEPROM reading and writing functions
+  if __test_eeprom_reading_functions:
+
+    eeprom_user_data: List[int] = ufrcomm.user_data_read()
+    print(pad("USER_DATA_READ"), eeprom_user_data)
+
+    if __test_eeprom_writing_functions:
+
+      print("USER_DATA_WRITE")
+      ufrcomm.user_data_write(eeprom_user_data)
+
   # Test ad-hoc (peer-to-peer) functions
   if __test_ad_hoc_functions:
 
@@ -2665,6 +2707,7 @@ def __test_api(device: Optional[str],
 
   # Test read functions
   if __test_read_functions:
+
       print(pad("LINEAR_READ:"),
 			ufrcomm.linear_read(uFRauthMode.T2T_NO_PWD_AUTH, 0, 10))
 
@@ -2711,6 +2754,7 @@ def __test_api(device: Optional[str],
 			b"7890123456" * 99
 
     if __test_eeprom_writing_functions:
+
       print("WRITE_EMULATION_NDEF (EEPROM)")
       ufrcomm.write_emulation_ndef(eeprom_ndef, False)
 
@@ -2725,6 +2769,7 @@ def __test_api(device: Optional[str],
   # Test asynchronous card ID sending functions, but not in HTTP mode, as it
   # is synchronous by nature
   if __test_asynchronous_card_id_sending and ufrcomm.resturl is None:
+
     print("SET_CARD_ID_SEND_CONF")
     ufrcomm.set_card_id_send_conf(True)
     print(pad("GET_CARD_ID_SEND_CONF"), ufrcomm.get_card_id_send_conf())

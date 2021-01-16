@@ -49,8 +49,8 @@ GET_HARDWARE_VERSION          get_hardware_version()          Implemented
 GET_FIRMWARE_VERSION          get_firmware_version()          Implemented
 GET_BUILD_NUMBER              get_build_number()              Implemented
 READER_KEY_WRITE              N/A                             Not implemented
-USER_DATA_READ                N/A                             Not implemented
-USER_DATA_WRITE               N/A                             Not implemented
+USER_DATA_READ                user_data_read()                Implemented
+USER_DATA_WRITE               user_data_write()               Implemented
 READER_KEYS_LOCK              N/A                             Not implemented
 READER_KEYS_UNLOCK            N/A                             Not implemented
 READER_PASSWORD_WRITE         N/A                             Not implemented
@@ -170,7 +170,7 @@ CHECK_UID_CHANGE              check_uid_change()              Implemented
 RF_RESET                      rf_reset()                      Implemented
 GET_READER_STATUS             get_reader_status()             Implemented
 ----------------------------------------------------------------------------
-State of completion:          37%
+State of completion:          38%
 
 uFRcomm class-specific methods
 ----------------------------------------------------------------------------
