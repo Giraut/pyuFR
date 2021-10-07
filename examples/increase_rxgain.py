@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+"""Increase the Rx gain for ISO14443A tag types. Useful to read NFC implants with smaller antennae more easily
+"""
 
 ### Modules
 import sys
@@ -49,7 +51,6 @@ if __name__ == "__main__":
     print()
 
     # Modify values
-    rflevelamp = False
     rxgain = 0b111	# 48 dB - Factory value is 33 dB (0b100)
 
     # Encode new RFCfgReg
