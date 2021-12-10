@@ -1,0 +1,7 @@
+Package: python3-pyufr
+Version:
+Maintainer: Rosco <roskis@runbox.com>
+Description: pyuFR - Pure Python communication class for Digital Logic uFR-series NFC readers
+Homepage: https://github.com/Giraut/pyuFR
+Architecture: all
+Depends: python3 (>=3.7.0b1), python3-serial, python3-websocket, python3-requests
