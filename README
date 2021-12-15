@@ -1,6 +1,6 @@
                                     pyuFR
                                     -----
-                                    v0.3.8
+                                    v0.3.9
 
     Pure Python communication class for Digital Logic uFR-series NFC readers
     ------------------------------------------------------------------------
@@ -35,7 +35,16 @@ Python, and adds a few addiitional functions.
 
 The uFR COM protocol is specified here: 
 
-ohttps://github.com/nfc-rfid-reader-sdk/ufr-doc/raw/master/uFR_COM_Protocol.pdf
+https://github.com/nfc-rfid-reader-sdk/ufr-doc/raw/master/uFR_COM_Protocol.pdf
+
+
+
+Debian, RPM and Arch Linux packages are available here:
+
+  https://github.com/Giraut/ppa
+  https://github.com/Giraut/rpm
+  https://aur.archlinux.org/packages/python-pyufr-git/
+
 
 
 
