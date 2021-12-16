@@ -31,12 +31,16 @@ mkdir -p ${BUILDROOT}/usr/share/doc/python3-pyufr/examples
 echo
 echo ${BUILDROOT}/usr/share/doc/python3-pyufr
 echo
-cp -a ${SRC}/README ${BUILDROOT}/usr/share/doc/python3-pyufr
-cp -a ${SRC}/LICENSE ${BUILDROOT}/usr/share/doc/python3-pyufr
+install -m 644 ${SRC}/README ${BUILDROOT}/usr/share/doc/python3-pyufr
+install -m 644 ${SRC}/LICENSE ${BUILDROOT}/usr/share/doc/python3-pyufr
 
-cp -a ${SRC}/pyufr.py ${BUILDROOT}/usr/lib/python3/dist-packages
+install -m 644 ${SRC}/pyufr.py ${BUILDROOT}/usr/lib/python3/dist-packages
 
-cp -a ${SRC}/examples ${BUILDROOT}/usr/share/doc/python3-pyufr
+install -m 755 ${SRC}/examples/* ${BUILDROOT}/usr/share/doc/python3-pyufr/examples
+
+# Fixup permissions
+find ${PKGBUILD} -type d -exec chmod 755 {} \;
+chmod 644 ${PKGBUILD}/SPECS/python3-pyufr.spec
 
 # Set the version in the spec file
 sed -i "s/^Version:.*\$/Version: ${VERSION}/" ${PKGBUILD}/SPECS/python3-pyufr.spec
