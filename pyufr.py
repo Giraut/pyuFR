@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 ### Parameters
-_default_ufr_timeout = 1 #s
+_default_ufr_timeout = 2 #s
 
 # Extra delays following certain commands, that aren't prescribed in the COM
 # protocol, but that are apparently needed to prevent the reader from going
